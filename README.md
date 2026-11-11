@@ -32,3 +32,7 @@ The first configure downloads GoogleTest. Pass `-DPIXELFORGE_BUILD_TESTS=OFF` to
 |---|---|---|
 | [stb_image, stb_image_write](https://github.com/nothings/stb) | Reading and writing PNG and JPEG, vendored in `third_party/stb` | MIT or public domain |
 | [GoogleTest](https://github.com/google/googletest) 1.18.0 | Unit tests, downloaded at configure time | BSD 3-Clause |
+
+## License
+
+MIT. See [LICENSE](LICENSE).
