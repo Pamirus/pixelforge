@@ -1,0 +1,19 @@
+# Build output
+/build/
+/build-*/
+/cmake-build-*/
+/out/
+/compile_commands.json
+
+# Editors and tools
+.vscode/
+.idea/
+.qtcreator/
+*.user
+.cache/
+
+# macOS
+.DS_Store
+
+# Filter results written while trying things out
+/images/out/
