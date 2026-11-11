@@ -11,3 +11,9 @@ pixelforge loads a photo, applies filters such as grayscale, brightness, blur or
 ```sh
 pixelforge cat.png out.png --grayscale --brightness 20 --blur 5
 ```
+
+## Third-party code
+
+| Library | Used for | License |
+|---|---|---|
+| [stb_image, stb_image_write](https://github.com/nothings/stb) | Reading and writing PNG and JPEG, vendored in `third_party/stb` | MIT or public domain |
