@@ -19,10 +19,14 @@ Needs CMake 3.25 or newer and a C++20 compiler.
 ```sh
 cmake -B build        # Release unless CMAKE_BUILD_TYPE says otherwise
 cmake --build build
+ctest --test-dir build --output-on-failure
 ```
+
+The first configure downloads GoogleTest. Pass `-DPIXELFORGE_BUILD_TESTS=OFF` to skip the tests.
 
 ## Third-party code
 
 | Library | Used for | License |
 |---|---|---|
 | [stb_image, stb_image_write](https://github.com/nothings/stb) | Reading and writing PNG and JPEG, vendored in `third_party/stb` | MIT or public domain |
+| [GoogleTest](https://github.com/google/googletest) 1.18.0 | Unit tests, downloaded at configure time | BSD 3-Clause |
