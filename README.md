@@ -12,6 +12,15 @@ pixelforge loads a photo, applies filters such as grayscale, brightness, blur or
 pixelforge cat.png out.png --grayscale --brightness 20 --blur 5
 ```
 
+## Building
+
+Needs CMake 3.25 or newer and a C++20 compiler.
+
+```sh
+cmake -B build        # Release unless CMAKE_BUILD_TYPE says otherwise
+cmake --build build
+```
+
 ## Third-party code
 
 | Library | Used for | License |

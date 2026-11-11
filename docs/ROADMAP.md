@@ -30,7 +30,7 @@ pixelforge is built in twelve stages. Each stage applies one group of C++ ideas 
 
 - [x] README, `.gitignore` and this roadmap
 - [x] Vendor `stb_image` and `stb_image_write`
-- [ ] CMake build: C++20, Release by default
+- [x] CMake build: C++20, Release by default
 - [ ] GoogleTest with a PNG round-trip smoke test
 - [ ] GitHub Actions: build and test on Ubuntu and macOS
 - [ ] `baseline_c/`: image struct with `malloc`/`free`, load and save through stb
