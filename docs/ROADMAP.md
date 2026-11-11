@@ -32,7 +32,7 @@ pixelforge is built in twelve stages. Each stage applies one group of C++ ideas 
 - [x] Vendor `stb_image` and `stb_image_write`
 - [x] CMake build: C++20, Release by default
 - [x] GoogleTest with a PNG round-trip smoke test
-- [ ] GitHub Actions: build and test on Ubuntu and macOS
+- [x] GitHub Actions: build and test on Ubuntu and macOS
 - [ ] `baseline_c/`: image struct with `malloc`/`free`, load and save through stb
 - [ ] Grayscale and brightness filters in C
 - [ ] `pixelforge_c` command line: `pixelforge_c in.png out.png --grayscale --brightness 20`
