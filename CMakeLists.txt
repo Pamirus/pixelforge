@@ -30,6 +30,7 @@ else()
 endif()
 
 add_subdirectory(third_party/stb)
+add_subdirectory(baseline_c)
 
 if(PIXELFORGE_BUILD_TESTS)
   enable_testing()
