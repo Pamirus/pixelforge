@@ -17,3 +17,18 @@ add_executable(pixelforge_tests
 target_link_libraries(pixelforge_tests PRIVATE
   pixelforge_c_core stb GTest::gtest_main pixelforge_warnings)
 gtest_discover_tests(pixelforge_tests)
+
+# Command-line checks for the C baseline. They pass when the output matches.
+add_test(NAME cli_c.help COMMAND pixelforge_c --help)
+add_test(NAME cli_c.no_arguments COMMAND pixelforge_c)
+add_test(NAME cli_c.bad_brightness COMMAND pixelforge_c in.png out.png --brightness 1000)
+add_test(NAME cli_c.unknown_option COMMAND pixelforge_c in.png out.png --sepia)
+add_test(NAME cli_c.missing_input COMMAND pixelforge_c no-such-file.png out.png)
+set_tests_properties(cli_c.help cli_c.no_arguments
+  PROPERTIES PASS_REGULAR_EXPRESSION "usage: pixelforge_c")
+set_tests_properties(cli_c.bad_brightness
+  PROPERTIES PASS_REGULAR_EXPRESSION "--brightness needs a whole number")
+set_tests_properties(cli_c.unknown_option
+  PROPERTIES PASS_REGULAR_EXPRESSION "unknown option '--sepia'")
+set_tests_properties(cli_c.missing_input
+  PROPERTIES PASS_REGULAR_EXPRESSION "cannot load no-such-file.png")
