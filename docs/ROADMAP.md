@@ -37,7 +37,7 @@ pixelforge is built in twelve stages. Each stage applies one group of C++ ideas 
 - [x] Grayscale and brightness filters in C
 - [x] `pixelforge_c` command line: `pixelforge_c in.png out.png --grayscale --brightness 20`
 - [x] Tests for the C filters: after grayscale R = G = B, brightness saturates at 255
-- [ ] Sample photo in `images/`, first timing on a 4K image in the README, tag `v0`
+- [x] Sample photo in `images/`, first timing on a 4K image in the README, tag `v0`
 
 ## v1 — `Image` class
 

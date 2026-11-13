@@ -7,3 +7,6 @@ target_link_libraries(pixelforge_c_core PRIVATE stb pixelforge_warnings)
 
 add_executable(pixelforge_c main.c)
 target_link_libraries(pixelforge_c PRIVATE pixelforge_c_core pixelforge_warnings)
+
+add_executable(pixelforge_c_bench bench.c)
+target_link_libraries(pixelforge_c_bench PRIVATE pixelforge_c_core pixelforge_warnings)
