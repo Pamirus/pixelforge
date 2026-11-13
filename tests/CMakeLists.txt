@@ -32,3 +32,8 @@ set_tests_properties(cli_c.unknown_option
   PROPERTIES PASS_REGULAR_EXPRESSION "unknown option '--sepia'")
 set_tests_properties(cli_c.missing_input
   PROPERTIES PASS_REGULAR_EXPRESSION "cannot load no-such-file.png")
+
+# The whole path on a real 4K photo: load, both filters, save.
+add_test(NAME cli_c.photo
+  COMMAND pixelforge_c ${PROJECT_SOURCE_DIR}/images/cat-4k.jpg
+          ${CMAKE_CURRENT_BINARY_DIR}/cat-4k-gray.jpg --grayscale --brightness 20)
