@@ -136,15 +136,21 @@ TEST(Image, MoveAssignmentReplacesPixels)
     EXPECT_TRUE(source.empty());
 }
 
-TEST(Image, SelfMoveAssignmentKeepsPixels)
+// A standard library object moved into itself is left valid but with
+// unspecified contents; libc++ empties the vector. Image inherits that, so the
+// test only asks for a consistent image that can be assigned to again.
+TEST(Image, SelfMoveAssignmentLeavesValidImage)
 {
     Image image = make_test_image(3, 2);
-    const Image expected = image;
 
     Image& same = image;
     image = std::move(same);
 
-    EXPECT_TRUE(same_pixels(image, expected));
+    EXPECT_EQ(image.size(), static_cast<std::size_t>(image.width()) *
+                                static_cast<std::size_t>(image.height()) * Image::channels);
+    image = make_test_image(2, 2);
+    EXPECT_EQ(image.width(), 2);
+    EXPECT_EQ(image.size(), 2u * 2u * Image::channels);
 }
 
 TEST(Image, SwapExchangesPixels)
@@ -154,6 +160,7 @@ TEST(Image, SwapExchangesPixels)
     const std::uint8_t* a_pixels = a.data();
     const std::uint8_t* b_pixels = b.data();
 
+    using std::swap; // a swap found for Image by lookup is used, std::swap otherwise
     swap(a, b);
 
     EXPECT_EQ(a.data(), b_pixels);

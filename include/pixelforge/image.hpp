@@ -2,52 +2,46 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <vector>
 
 namespace pixelforge {
 
 // An RGB image with 8 bits per channel. Pixels are stored row by row, with the
 // channels of each pixel next to each other: RGBRGB...
 //
-// The image owns its pixels. It allocates them with new[] and frees them in the
-// destructor, so it also has to say what copying and moving mean. That makes
-// five special member functions written by hand: the Rule of Five.
+// The pixels live in a std::vector, which already knows how to copy, move and
+// free them. So the class declares none of the five special member functions
+// and the compiler-generated ones are correct: the Rule of Zero.
 class Image {
 public:
     static constexpr int channels = 3;
 
     // An empty image: no pixels, width and height 0.
-    Image() noexcept = default;
+    Image() = default;
 
     // A black image. Throws std::invalid_argument unless both sizes are
     // positive, and std::length_error if the size does not fit in memory.
     Image(int width, int height);
 
-    ~Image();
-
-    // Copying allocates new pixels and copies them (a deep copy).
-    Image(const Image& other);
-    Image& operator=(const Image& other);
-
-    // Moving takes the other image's pixels and leaves it empty.
-    Image(Image&& other) noexcept;
-    Image& operator=(Image&& other) noexcept;
-
-    int width() const noexcept { return width_; }
-    int height() const noexcept { return height_; }
-    bool empty() const noexcept { return pixels_ == nullptr; }
+    // A moved-from vector is empty, but the generated move copies the two ints
+    // and leaves them as they were. An empty image therefore reports 0 here,
+    // so that width * height * channels == size() always holds.
+    int width() const noexcept { return pixels_.empty() ? 0 : width_; }
+    int height() const noexcept { return pixels_.empty() ? 0 : height_; }
+    bool empty() const noexcept { return pixels_.empty(); }
 
     // Number of bytes in the pixel buffer: width * height * channels.
-    std::size_t size() const noexcept;
+    std::size_t size() const noexcept { return pixels_.size(); }
 
-    std::uint8_t* data() noexcept { return pixels_; }
-    const std::uint8_t* data() const noexcept { return pixels_; }
-
-    friend void swap(Image& a, Image& b) noexcept;
+    std::uint8_t* data() noexcept { return pixels_.data(); }
+    const std::uint8_t* data() const noexcept { return pixels_.data(); }
 
 private:
+    // pixels_ comes first: the generated copy assignment assigns members in
+    // this order, so if copying the pixels throws, the sizes are not yet changed.
+    std::vector<std::uint8_t> pixels_;
     int width_ = 0;
     int height_ = 0;
-    std::uint8_t* pixels_ = nullptr;
 };
 
 } // namespace pixelforge
