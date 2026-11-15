@@ -14,7 +14,8 @@ include(GoogleTest)
 add_executable(pixelforge_tests
   stb_smoke_test.cpp
   c_baseline_test.cpp
-  image_test.cpp)
+  image_test.cpp
+  io_test.cpp)
 target_link_libraries(pixelforge_tests PRIVATE
   pixelforge_core pixelforge_c_core stb GTest::gtest_main pixelforge_warnings)
 gtest_discover_tests(pixelforge_tests)
