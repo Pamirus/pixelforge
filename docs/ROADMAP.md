@@ -46,7 +46,7 @@ pixelforge is built in twelve stages. Each stage applies one group of C++ ideas 
 - [x] `load` and `save` that throw when a file is missing or unreadable
 - [x] `ScopedTimer` that reports how long a scope took
 - [x] `pixelforge` command line with grayscale, brightness, negative and threshold
-- [ ] Tests, README row, tag `v1`
+- [x] Tests, README row, tag `v1`
 
 ## v2 — Copy vs move
 

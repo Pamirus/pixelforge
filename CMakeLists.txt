@@ -32,6 +32,7 @@ endif()
 add_subdirectory(third_party/stb)
 add_subdirectory(baseline_c)
 add_subdirectory(src)
+add_subdirectory(benchmarks)
 
 if(PIXELFORGE_BUILD_TESTS)
   enable_testing()
