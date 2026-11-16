@@ -41,3 +41,35 @@ set_tests_properties(cli_c.missing_input
 add_test(NAME cli_c.photo
   COMMAND pixelforge_c ${PROJECT_SOURCE_DIR}/images/cat-4k.jpg
           ${CMAKE_CURRENT_BINARY_DIR}/cat-4k-gray.jpg --grayscale --brightness 20)
+
+# The same checks for the C++ command line, plus its extra filters and options.
+add_test(NAME cli.help COMMAND pixelforge --help)
+add_test(NAME cli.no_arguments COMMAND pixelforge)
+add_test(NAME cli.bad_brightness COMMAND pixelforge in.png out.png --brightness 1000)
+add_test(NAME cli.bad_threshold COMMAND pixelforge in.png out.png --threshold -1)
+add_test(NAME cli.missing_number COMMAND pixelforge in.png out.png --threshold)
+add_test(NAME cli.unknown_option COMMAND pixelforge in.png out.png --sepia)
+add_test(NAME cli.missing_input COMMAND pixelforge no-such-file.png out.png)
+add_test(NAME cli.unknown_output_format
+  COMMAND pixelforge ${PROJECT_SOURCE_DIR}/docs/images/cat.jpg
+          ${CMAKE_CURRENT_BINARY_DIR}/cat.gif)
+set_tests_properties(cli.help cli.no_arguments
+  PROPERTIES PASS_REGULAR_EXPRESSION "usage: pixelforge INPUT OUTPUT")
+set_tests_properties(cli.bad_brightness
+  PROPERTIES PASS_REGULAR_EXPRESSION "--brightness needs a whole number from -255 to 255")
+set_tests_properties(cli.bad_threshold cli.missing_number
+  PROPERTIES PASS_REGULAR_EXPRESSION "--threshold needs a whole number from 0 to 255")
+set_tests_properties(cli.unknown_option
+  PROPERTIES PASS_REGULAR_EXPRESSION "unknown option '--sepia'")
+set_tests_properties(cli.missing_input
+  PROPERTIES PASS_REGULAR_EXPRESSION "cannot load no-such-file.png: no such file")
+set_tests_properties(cli.unknown_output_format
+  PROPERTIES PASS_REGULAR_EXPRESSION "cat.gif: unsupported format")
+
+# The whole path on the 4K photo with every filter. --time prints each step.
+add_test(NAME cli.photo
+  COMMAND pixelforge ${PROJECT_SOURCE_DIR}/images/cat-4k.jpg
+          ${CMAKE_CURRENT_BINARY_DIR}/cat-4k-all.png
+          --grayscale --brightness 20 --negative --threshold 128 --time)
+set_tests_properties(cli.photo
+  PROPERTIES PASS_REGULAR_EXPRESSION "threshold 128: [0-9]+\\.[0-9]+ ms.*save: [0-9]+\\.[0-9]+ ms")
