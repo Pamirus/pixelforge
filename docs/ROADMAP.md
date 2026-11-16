@@ -44,7 +44,7 @@ pixelforge is built in twelve stages. Each stage applies one group of C++ ideas 
 - [x] `Image` that owns its pixels with `new[]`/`delete[]` and follows the Rule of Five
 - [x] The same class reduced to the Rule of Zero with `std::vector`
 - [x] `load` and `save` that throw when a file is missing or unreadable
-- [ ] `ScopedTimer` that reports how long a scope took
+- [x] `ScopedTimer` that reports how long a scope took
 - [ ] `pixelforge` command line with grayscale, brightness, negative and threshold
 - [ ] Tests, README row, tag `v1`
 
