@@ -6,7 +6,7 @@ A small command-line photo filter program, and a lab for measuring what modern C
 
 pixelforge loads a photo, applies filters such as grayscale, brightness, blur or threshold, and saves the result. The program is rewritten in stages. It starts as plain C with `malloc` and `free`, then moves through RAII, move semantics, views, templates, concepts, data layout, parallelism and lazy evaluation. Each stage gets a git tag (`v0`, `v1`, …) and a benchmark, so any two stages can be compared.
 
-**Status:** v0, the C baseline, and v1, an `Image` class built on RAII, are done. Next is v2, copying versus moving images. The plan is in [docs/ROADMAP.md](docs/ROADMAP.md).
+**Status:** v0 (the C baseline), v1 (an `Image` class built on RAII) and v2 (copying versus moving) are done. Next is v3: views that look at part of an image without copying it. The plan is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## Usage
 
@@ -50,6 +50,10 @@ The first configure downloads GoogleTest and Google Benchmark. Pass `-DPIXELFORG
 
 ## Results
 
+Machine: Apple A18 Pro (6 cores, 8 GB), Apple Clang 21, Release build (`-O3`). On this laptop timings vary from run to run and even more from day to day: on 2026-11-13 the v0 benchmark gave 6.2 ms and 3.1 ms. So only rows measured in the same session are compared, and a whole table is measured again whenever a row is added.
+
+### Filters
+
 Time for one filter pass over the 3840 × 2160 photo (24.9 MB in memory):
 
 ```sh
@@ -62,13 +66,31 @@ build/benchmarks/pixelforge_bench images/cat-4k.jpg 200      # v1
 | v0 | C, `malloc`/`free` | 4.1 ms | 2.2 ms |
 | v1 | C++ `Image` class: RAII, `std::vector`, exceptions | 4.1 ms | 1.8 ms |
 
-Each benchmark run times 200 passes and reports their median. The two benchmarks were run one after the other, three times each, on 2026-11-16; the table shows the middle of the three medians.
-
-Machine: Apple A18 Pro (6 cores, 8 GB), Apple Clang 21, Release build (`-O3`). On this laptop timings vary from run to run and even more from day to day: on 2026-11-13 the same v0 benchmark gave 6.2 ms and 3.1 ms. So only rows measured in the same session are compared, and the whole table is measured again whenever a row is added.
+Each benchmark run times 200 passes and reports their median. The two benchmarks were run one after the other, three times each, on 2026-11-16; the table shows the middle of the three medians. v2 did not change the filters, so it has no row here.
 
 - **Grayscale** is the same in C and C++. Keeping the pixels in a class with a `std::vector` costs nothing measurable.
 - **Brightness** was about 20% faster in C++ in all three rounds. Both versions process 16 bytes at a time, but their inner loops differ. In C++, `std::clamp(v, 0, 255)` becomes one max and one min per vector. In C, the two `if`s in `clamp_to_byte` become a mask and extra shuffle steps: 23 instructions per 16 bytes instead of 19. That is the likely cause, and it comes from the code the compiler chose, not from the language. Stage v9 compares assembly in detail.
 - **Grayscale takes about twice as long as brightness**, although both touch the same 24.9 MB. Stage v8 looks into why.
+
+### Copying versus moving (v2)
+
+```sh
+build/benchmarks/pixelforge_benchmarks --benchmark_repetitions=5
+```
+
+| Operation on a 3840 × 2160 image (24.9 MB) | Time |
+|---|---|
+| Copy into a new image | 0.9 ms |
+| Copy into an existing image of the same size | 1.0 ms |
+| Copy into a new image, first time in a fresh process | 5.5 ms |
+| Move to another image and back (two moves) | 1.5 ns |
+
+Measured on 2026-11-18. The first-copy row is the median of five separate processes, which ranged from 3.8 to 9.2 ms; each other row is the middle of three runs of five repetitions. Between repetitions the times varied by 10 to 20%, so 0.9 and 1.0 ms count as the same.
+
+- **A move costs about a nanosecond, whatever the image size.** It hands over a pointer and two sizes; the 24.9 MB stay where they are. A copy reads and writes all of them, which takes about a million times longer.
+- **A repeated copy into a new image costs no more than one into an existing image**, although it allocates 24.9 MB each time. macOS's allocator keeps the large block the previous copy freed and hands it out again with its memory pages already in place. With that cache turned off (`MallocLargeCache=0`), the same copy took 2.75 ms.
+- **The first copy in a process is the slow one.** Its memory is new, and the system sets up each 16 KB page the first time it is written: about 1,500 pages for one image.
+- **Which returns copy and which move** is checked in [tests/return_value_test.cpp](tests/return_value_test.cpp). Returning a temporary or a single named image costs nothing; `return std::move(image)` costs a move; `return first ? a : b` costs a copy.
 
 ## Third-party code
 
