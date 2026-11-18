@@ -18,6 +18,7 @@ add_executable(pixelforge_tests
   filters_test.cpp
   image_test.cpp
   io_test.cpp
+  return_value_test.cpp
   scoped_timer_test.cpp)
 target_link_libraries(pixelforge_tests PRIVATE
   pixelforge_core pixelforge_c_core stb GTest::gtest_main pixelforge_warnings)
