@@ -46,7 +46,7 @@ cmake --build build
 ctest --test-dir build --output-on-failure
 ```
 
-The first configure downloads GoogleTest. Pass `-DPIXELFORGE_BUILD_TESTS=OFF` to skip the tests.
+The first configure downloads GoogleTest and Google Benchmark. Pass `-DPIXELFORGE_BUILD_TESTS=OFF` or `-DPIXELFORGE_BUILD_BENCHMARKS=OFF` to skip them.
 
 ## Results
 
@@ -76,6 +76,7 @@ Machine: Apple A18 Pro (6 cores, 8 GB), Apple Clang 21, Release build (`-O3`). O
 |---|---|---|
 | [stb_image, stb_image_write](https://github.com/nothings/stb) | Reading and writing PNG and JPEG, vendored in `third_party/stb` | MIT or public domain |
 | [GoogleTest](https://github.com/google/googletest) 1.18.0 | Unit tests, downloaded at configure time | BSD 3-Clause |
+| [Google Benchmark](https://github.com/google/benchmark) 1.10.0 | Microbenchmarks, downloaded at configure time | Apache 2.0 |
 
 ## License
 

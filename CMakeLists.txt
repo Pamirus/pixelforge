@@ -20,6 +20,7 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
 endif()
 
 option(PIXELFORGE_BUILD_TESTS "Build the unit tests (downloads GoogleTest)" ON)
+option(PIXELFORGE_BUILD_BENCHMARKS "Build the Google Benchmark programs (downloads Google Benchmark)" ON)
 
 # Warning flags for the project's own targets. Third-party code does not use them.
 add_library(pixelforge_warnings INTERFACE)
