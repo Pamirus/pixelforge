@@ -50,7 +50,7 @@ pixelforge is built in twelve stages. Each stage applies one group of C++ ideas 
 
 ## v2 — Copy vs move
 
-- [ ] Image variant that counts its copies and moves
+- [x] Image variant that counts its copies and moves
 - [ ] Google Benchmark: copying vs moving a 4K image (about 25 MB)
 - [ ] Return images from functions and confirm RVO/NRVO with the counters
 - [ ] README row, tag `v2`

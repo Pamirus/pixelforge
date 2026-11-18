@@ -14,6 +14,7 @@ include(GoogleTest)
 add_executable(pixelforge_tests
   stb_smoke_test.cpp
   c_baseline_test.cpp
+  counted_image_test.cpp
   filters_test.cpp
   image_test.cpp
   io_test.cpp
