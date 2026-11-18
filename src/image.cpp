@@ -1,5 +1,8 @@
 #include "pixelforge/image.hpp"
 
+#include "pixelforge/image_view.hpp"
+
+#include <algorithm>
 #include <limits>
 #include <stdexcept>
 
@@ -27,6 +30,19 @@ std::size_t checked_size(int width, int height)
 Image::Image(int width, int height)
     : pixels_(checked_size(width, height)), width_(width), height_(height)
 {
+}
+
+// The rows of a crop are not next to each other in memory, so they are copied
+// one at a time.
+Image::Image(ImageView view)
+    : pixels_(view.empty() ? 0 : checked_size(view.width(), view.height())),
+      width_(view.width()),
+      height_(view.height())
+{
+    const auto row_bytes = static_cast<std::size_t>(width_) * channels;
+    for (int y = 0; y < height_; ++y) {
+        std::copy_n(view.pixel(0, y), row_bytes, pixels_.data() + y * row_bytes);
+    }
 }
 
 } // namespace pixelforge

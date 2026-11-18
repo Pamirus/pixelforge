@@ -57,7 +57,7 @@ pixelforge is built in twelve stages. Each stage applies one group of C++ ideas 
 
 ## v3 — Views
 
-- [ ] `ImageView`: crop a region without copying pixels
+- [x] `ImageView`: crop a region without copying pixels
 - [ ] Rows exposed as `std::span`
 - [ ] Filter objects held in `std::unique_ptr`
 - [ ] Horizontal flip, vertical flip, 90° rotation

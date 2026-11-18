@@ -17,6 +17,7 @@ add_executable(pixelforge_tests
   counted_image_test.cpp
   filters_test.cpp
   image_test.cpp
+  image_view_test.cpp
   io_test.cpp
   return_value_test.cpp
   scoped_timer_test.cpp)

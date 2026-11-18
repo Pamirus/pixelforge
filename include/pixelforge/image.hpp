@@ -6,6 +6,8 @@
 
 namespace pixelforge {
 
+class ImageView;
+
 // An RGB image with 8 bits per channel. Pixels are stored row by row, with the
 // channels of each pixel next to each other: RGBRGB...
 //
@@ -22,6 +24,10 @@ public:
     // A black image. Throws std::invalid_argument unless both sizes are
     // positive, and std::length_error if the size does not fit in memory.
     Image(int width, int height);
+
+    // A copy of the pixels a view shows, like std::string from a
+    // std::string_view. Explicit, because it copies.
+    explicit Image(ImageView view);
 
     // A moved-from vector is empty, but the generated move copies the two ints
     // and leaves them as they were. An empty image therefore reports 0 here,
