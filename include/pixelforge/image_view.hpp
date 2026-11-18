@@ -4,6 +4,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <span>
 
 namespace pixelforge {
 
@@ -43,6 +44,14 @@ public:
     std::uint8_t* pixel(int x, int y) const noexcept
     {
         return data_ + y * stride_ + std::ptrdiff_t{x} * channels;
+    }
+
+    // Row y of the view, counting from 0 at its top: width * channels bytes.
+    // Not checked. Like a const std::span, a const view still gives writable
+    // rows; only a const Image is read-only.
+    std::span<std::uint8_t> row(int y) const noexcept
+    {
+        return {pixel(0, y), static_cast<std::size_t>(width_) * channels};
     }
 
     // The width × height rectangle of this view whose top-left corner is pixel

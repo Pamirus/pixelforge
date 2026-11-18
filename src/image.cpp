@@ -39,9 +39,8 @@ Image::Image(ImageView view)
       width_(view.width()),
       height_(view.height())
 {
-    const auto row_bytes = static_cast<std::size_t>(width_) * channels;
     for (int y = 0; y < height_; ++y) {
-        std::copy_n(view.pixel(0, y), row_bytes, pixels_.data() + y * row_bytes);
+        std::ranges::copy(view.row(y), row(y).begin());
     }
 }
 

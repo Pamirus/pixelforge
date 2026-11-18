@@ -10,8 +10,11 @@
 #include <cstdint>
 #include <iterator>
 #include <limits>
+#include <span>
 #include <stdexcept>
 #include <type_traits>
+#include <utility>
+#include <vector>
 
 using pixelforge::Image;
 using pixelforge::ImageView;
@@ -25,6 +28,10 @@ static_assert(std::is_convertible_v<Image&, ImageView>);
 static_assert(!std::is_constructible_v<ImageView, Image&&>);
 static_assert(!std::is_constructible_v<ImageView, const Image&>);
 static_assert(!std::is_convertible_v<ImageView, Image>);
+
+// Like a const std::span, a const view still writes to the image.
+static_assert(std::is_same_v<decltype(std::declval<const ImageView&>().row(0)),
+                             std::span<std::uint8_t>>);
 
 namespace {
 
@@ -78,26 +85,31 @@ TEST(ImageView, CropPointsIntoTheImage)
     EXPECT_EQ(crop.pixel(1, 1), image.data() + (2 * 4 + 2) * 3);
 }
 
+TEST(ImageView, RowOfACropIsPartOfTheImageRow)
+{
+    Image image(4, 3);
+    const ImageView crop = ImageView(image).crop(1, 1, 2, 2);
+
+    const std::span<std::uint8_t> row = crop.row(1);
+    EXPECT_EQ(row.size(), std::size_t{2 * Image::channels});
+    EXPECT_EQ(row.data(), image.row(2).data() + 1 * Image::channels);
+}
+
 TEST(ImageView, WritingThroughACropChangesOnlyThatRegion)
 {
     Image image(4, 3);
     const ImageView crop = ImageView(image).crop(1, 1, 2, 2);
     for (int y = 0; y < crop.height(); ++y) {
-        for (int x = 0; x < crop.width(); ++x) {
-            std::fill_n(crop.pixel(x, y), Image::channels, std::uint8_t{255});
-        }
+        std::ranges::fill(crop.row(y), std::uint8_t{255});
     }
 
-    for (int y = 0; y < image.height(); ++y) {
-        for (int x = 0; x < image.width(); ++x) {
-            const bool inside = x >= 1 && x <= 2 && y >= 1 && y <= 2;
-            const std::uint8_t expected = inside ? 255 : 0;
-            const std::uint8_t* p = image.data() + (y * image.width() + x) * Image::channels;
-            EXPECT_TRUE(std::all_of(p, p + Image::channels,
-                                    [=](std::uint8_t v) { return v == expected; }))
-                << "pixel " << x << ", " << y;
-        }
-    }
+    // In rows 1 and 2, pixels 1 and 2 are now white; everything else is black.
+    const std::vector<std::uint8_t> untouched(4 * Image::channels, 0);
+    const std::vector<std::uint8_t> changed = {0,   0,   0,   255, 255, 255,
+                                               255, 255, 255, 0,   0,   0};
+    EXPECT_TRUE(std::ranges::equal(image.row(0), untouched));
+    EXPECT_TRUE(std::ranges::equal(image.row(1), changed));
+    EXPECT_TRUE(std::ranges::equal(image.row(2), changed));
 }
 
 TEST(ImageView, CropOfACropCountsFromItsOwnCorner)

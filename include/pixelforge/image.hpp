@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <span>
 #include <vector>
 
 namespace pixelforge {
@@ -42,7 +43,25 @@ public:
     std::uint8_t* data() noexcept { return pixels_.data(); }
     const std::uint8_t* data() const noexcept { return pixels_.data(); }
 
+    // Row y, counting from 0 at the top: width * channels bytes. y is not
+    // checked, like the index of operator[]. A const image gives read-only rows.
+    std::span<std::uint8_t> row(int y) noexcept
+    {
+        const auto length = row_length();
+        return {data() + y * length, length};
+    }
+    std::span<const std::uint8_t> row(int y) const noexcept
+    {
+        const auto length = row_length();
+        return {data() + y * length, length};
+    }
+
 private:
+    std::size_t row_length() const noexcept
+    {
+        return static_cast<std::size_t>(width()) * channels;
+    }
+
     // pixels_ comes first: the generated copy assignment assigns members in
     // this order, so if copying the pixels throws, the sizes are not yet changed.
     std::vector<std::uint8_t> pixels_;

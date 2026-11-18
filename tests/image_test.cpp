@@ -1,4 +1,4 @@
-// Tests for pixelforge::Image: construction, copying and moving.
+// Tests for pixelforge::Image: construction, rows, copying and moving.
 
 #include <gtest/gtest.h>
 
@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <span>
 #include <stdexcept>
 #include <type_traits>
 #include <utility>
@@ -17,6 +18,11 @@ using pixelforge::Image;
 // throw; otherwise it copies them.
 static_assert(std::is_nothrow_move_constructible_v<Image>);
 static_assert(std::is_nothrow_move_assignable_v<Image>);
+
+// A const image gives read-only rows.
+static_assert(std::is_same_v<decltype(std::declval<Image&>().row(0)), std::span<std::uint8_t>>);
+static_assert(std::is_same_v<decltype(std::declval<const Image&>().row(0)),
+                             std::span<const std::uint8_t>>);
 
 namespace {
 
@@ -63,6 +69,25 @@ TEST(Image, RejectsNonPositiveSizes)
     EXPECT_THROW(Image(0, 10), std::invalid_argument);
     EXPECT_THROW(Image(10, 0), std::invalid_argument);
     EXPECT_THROW(Image(-1, 10), std::invalid_argument);
+}
+
+TEST(Image, RowsFollowEachOtherInMemory)
+{
+    Image image(4, 3);
+    for (int y = 0; y < image.height(); ++y) {
+        EXPECT_EQ(image.row(y).size(), std::size_t{4 * Image::channels});
+        EXPECT_EQ(image.row(y).data(), image.data() + y * 4 * Image::channels);
+    }
+}
+
+TEST(Image, WritingToARowChangesOnlyThatRow)
+{
+    Image image(4, 3);
+    std::ranges::fill(image.row(1), std::uint8_t{7});
+
+    EXPECT_TRUE(std::ranges::all_of(image.row(1), [](std::uint8_t v) { return v == 7; }));
+    EXPECT_EQ(std::ranges::count(std::span(image.data(), image.size()), 7),
+              4 * Image::channels);
 }
 
 TEST(Image, CopyIsDeep)
