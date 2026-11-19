@@ -65,7 +65,7 @@ pixelforge is built in twelve stages. Each stage applies one group of C++ ideas 
 
 ## v4 — Templates
 
-- [ ] `Image<T>` for `std::uint8_t` and `float` pixels
+- [x] `Image<T>` for `std::uint8_t` and `float` pixels
 - [ ] Filters written once for both pixel types
 - [ ] Box blur: the average of a k×k neighbourhood
 - [ ] README row, tag `v4`

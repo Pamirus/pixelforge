@@ -168,3 +168,18 @@ TEST(ImageView, ImageFromAnEmptyViewIsEmpty)
     EXPECT_TRUE(copy.empty());
     EXPECT_EQ(copy.width(), 0);
 }
+
+// A view counts in channel values, whatever their type, so a float view works
+// the same way as an 8-bit one.
+TEST(ImageView, FloatViewCountsInChannelValues)
+{
+    pixelforge::FloatImage image(4, 3);
+    const pixelforge::FloatImageView crop = pixelforge::FloatImageView(image).crop(1, 1, 2, 2);
+    EXPECT_EQ(crop.stride(), 4 * 3);
+    EXPECT_EQ(crop.pixel(0, 0), image.data() + (1 * 4 + 1) * 3);
+
+    std::ranges::fill(crop.row(0), 0.5f);
+    const pixelforge::FloatImage copy(crop);
+    EXPECT_EQ(copy.data()[0], 0.5f);
+    EXPECT_EQ(copy.data()[copy.size() - 1], 0.0f); // the crop's second row was not filled
+}

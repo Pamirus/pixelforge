@@ -1,18 +1,31 @@
-// Tests for pixelforge::Image: construction, rows, copying and moving.
+// Tests for pixelforge::Image and FloatImage: construction, rows, copying,
+// moving and converting between the two.
 
 #include <gtest/gtest.h>
 
 #include "pixelforge/image.hpp"
+#include "pixelforge/image_view.hpp"
 
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <span>
 #include <stdexcept>
 #include <type_traits>
 #include <utility>
+#include <vector>
 
+using pixelforge::FloatImage;
 using pixelforge::Image;
+
+// An explicit instantiation compiles every member of a class template, also
+// those no test calls. So a member that does not work for one of the two
+// channel types fails to compile here, not later in code that first uses it.
+template class pixelforge::BasicImage<std::uint8_t>;
+template class pixelforge::BasicImage<float>;
+template class pixelforge::BasicImageView<std::uint8_t>;
+template class pixelforge::BasicImageView<float>;
 
 // std::vector<Image> only moves its elements when it grows if the moves cannot
 // throw; otherwise it copies them.
@@ -192,4 +205,75 @@ TEST(Image, SwapExchangesPixels)
     EXPECT_EQ(b.data(), a_pixels);
     EXPECT_EQ(a.width(), 5);
     EXPECT_EQ(b.width(), 2);
+}
+
+TEST(FloatImage, NewImageIsBlack)
+{
+    const FloatImage image(4, 3);
+    EXPECT_EQ(image.width(), 4);
+    EXPECT_EQ(image.height(), 3);
+    EXPECT_EQ(image.size(), 4u * 3u * FloatImage::channels);
+    EXPECT_TRUE(std::ranges::all_of(std::span(image.data(), image.size()),
+                                    [](float v) { return v == 0.0f; }));
+}
+
+// The generated copy and move work for any channel type.
+TEST(FloatImage, CopyIsDeepAndMoveEmptiesTheSource)
+{
+    FloatImage original(2, 2);
+    original.data()[0] = 0.5f;
+
+    const FloatImage copy = original;
+    EXPECT_NE(copy.data(), original.data());
+    EXPECT_EQ(copy.data()[0], 0.5f);
+
+    const float* pixels = original.data();
+    const FloatImage moved = std::move(original);
+    EXPECT_EQ(moved.data(), pixels);
+    EXPECT_TRUE(original.empty());
+    EXPECT_EQ(original.width(), 0);
+}
+
+TEST(ImageConversion, ToFloatMapsZeroTo255OntoZeroToOne)
+{
+    Image image(1, 1);
+    image.data()[0] = 0;
+    image.data()[1] = 51;
+    image.data()[2] = 255;
+
+    const FloatImage converted = pixelforge::to_float(image);
+    EXPECT_EQ(converted.width(), 1);
+    EXPECT_EQ(converted.height(), 1);
+    EXPECT_FLOAT_EQ(converted.data()[0], 0.0f);
+    EXPECT_FLOAT_EQ(converted.data()[1], 0.2f);
+    EXPECT_FLOAT_EQ(converted.data()[2], 1.0f);
+}
+
+TEST(ImageConversion, ToUint8RoundsAndClamps)
+{
+    FloatImage image(2, 1);
+    const float values[] = {0.5f, 0.2f, -0.5f, 1.5f, std::numeric_limits<float>::quiet_NaN(), 1.0f};
+    std::ranges::copy(values, image.data());
+
+    const Image converted = pixelforge::to_uint8(image);
+    // 0.5 * 255 = 127.5 rounds up to 128, and 0.2 * 255 = 51.
+    const std::vector<std::uint8_t> expected = {128, 51, 0, 255, 0, 255};
+    EXPECT_TRUE(std::equal(converted.data(), converted.data() + converted.size(),
+                           expected.begin(), expected.end()));
+}
+
+// Every 8-bit value survives the trip to float and back unchanged.
+TEST(ImageConversion, RoundTripKeepsEveryByteValue)
+{
+    Image image(86, 1); // 258 channel values: 0 to 255, then 0 and 1 again
+    for (std::size_t i = 0; i < image.size(); ++i) {
+        image.data()[i] = static_cast<std::uint8_t>(i % 256);
+    }
+    EXPECT_TRUE(same_pixels(pixelforge::to_uint8(pixelforge::to_float(image)), image));
+}
+
+TEST(ImageConversion, EmptyStaysEmpty)
+{
+    EXPECT_TRUE(pixelforge::to_float(Image()).empty());
+    EXPECT_TRUE(pixelforge::to_uint8(FloatImage()).empty());
 }
