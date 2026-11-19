@@ -69,6 +69,15 @@ void flip_vertical(BasicImage<T>& image)
 template <typename T>
 [[nodiscard]] BasicImage<T> rotate_90(const BasicImage<T>& image);
 
+// A box blur: every channel of every pixel becomes the average of the same
+// channel in the k × k pixels around it, where k = 2 * radius + 1. Radius 1
+// averages 3 × 3 pixels, radius 2 averages 5 × 5. Near the border the
+// neighbours outside the image are left out, and the average is taken over
+// the rest. Radius 0 changes nothing. Throws std::invalid_argument if radius
+// is negative.
+template <typename T>
+void box_blur(BasicImage<T>& image, int radius);
+
 // The same filters as objects with a common interface, so that a list of
 // different filters can be built at run time and applied in order. Each
 // object keeps its settings and calls the function above.
@@ -142,6 +151,16 @@ class Rotate90 : public Filter {
 public:
     void apply(Image& image) const override;
     std::string description() const override;
+};
+
+class BoxBlur : public Filter {
+public:
+    explicit BoxBlur(int radius) : radius_(radius) {}
+    void apply(Image& image) const override;
+    std::string description() const override;
+
+private:
+    int radius_;
 };
 
 } // namespace pixelforge

@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <format>
 #include <span>
+#include <stdexcept>
 #include <string>
 
 namespace pixelforge {
@@ -28,6 +29,15 @@ struct ChannelTraits<std::uint8_t> {
 
     static Work from_setting(int value) { return value; }
 
+    // A sum of many channel values, and its rounded mean. 64 bits hold the
+    // sum of every channel value in any image that fits in memory.
+    using Sum = std::uint64_t;
+    static std::uint8_t mean(Sum sum, int count)
+    {
+        const auto n = static_cast<Sum>(count);
+        return static_cast<std::uint8_t>((sum + n / 2) / n);
+    }
+
     static std::uint8_t average(const std::uint8_t* pixel)
     {
         const unsigned sum = unsigned{pixel[0]} + pixel[1] + pixel[2];
@@ -43,6 +53,9 @@ struct ChannelTraits<float> {
     static constexpr Work max = 1.0f;
 
     static Work from_setting(int value) { return static_cast<float>(value) / 255.0f; }
+
+    using Sum = float;
+    static float mean(Sum sum, int count) { return sum / static_cast<float>(count); }
 
     static float average(const float* pixel) { return (pixel[0] + pixel[1] + pixel[2]) / 3.0f; }
 };
@@ -146,6 +159,56 @@ BasicImage<T> rotate_90(const BasicImage<T>& image)
     return rotated;
 }
 
+// The simplest version: every neighbour is visited, and checked against the
+// border, for every pixel. Stage v8 moves the border checks out of the inner
+// loop and measures the difference.
+template <typename T>
+void box_blur(BasicImage<T>& image, int radius)
+{
+    if (radius < 0) {
+        throw std::invalid_argument("blur radius must not be negative");
+    }
+    if (radius == 0 || image.empty()) {
+        return;
+    }
+    using Traits = ChannelTraits<T>;
+    constexpr int channels = BasicImage<T>::channels;
+    const int width = image.width();
+    const int height = image.height();
+    // A larger radius covers the whole image and gives the same result, and
+    // capping it keeps x + dx below far from int overflow.
+    radius = std::min(radius, std::max(width, height));
+
+    // Each output pixel needs the original values of its neighbours, some of
+    // which are already overwritten, so the filter reads from a copy.
+    const BasicImage<T> source = image;
+
+    for (int y = 0; y < height; ++y) {
+        const std::span<T> out = image.row(y);
+        for (int x = 0; x < width; ++x) {
+            typename Traits::Sum sum[channels] = {};
+            int count = 0;
+            for (int dy = -radius; dy <= radius; ++dy) {
+                for (int dx = -radius; dx <= radius; ++dx) {
+                    const int sx = x + dx;
+                    const int sy = y + dy;
+                    if (sx < 0 || sx >= width || sy < 0 || sy >= height) {
+                        continue;
+                    }
+                    const T* pixel = source.row(sy).data() + sx * channels;
+                    for (int c = 0; c < channels; ++c) {
+                        sum[c] += pixel[c];
+                    }
+                    ++count;
+                }
+            }
+            for (int c = 0; c < channels; ++c) {
+                out[static_cast<std::size_t>(x) * channels + c] = Traits::mean(sum[c], count);
+            }
+        }
+    }
+}
+
 // Explicit instantiations: the compiler generates each filter for both
 // channel types here, so the declarations in filters.hpp are all other files
 // need.
@@ -163,6 +226,8 @@ template void flip_vertical(ImageView);
 template void flip_vertical(FloatImageView);
 template Image rotate_90(const Image&);
 template FloatImage rotate_90(const FloatImage&);
+template void box_blur(Image&, int);
+template void box_blur(FloatImage&, int);
 
 void Grayscale::apply(Image& image) const
 {
@@ -233,6 +298,16 @@ void Rotate90::apply(Image& image) const
 std::string Rotate90::description() const
 {
     return "rotate 90";
+}
+
+void BoxBlur::apply(Image& image) const
+{
+    box_blur(image, radius_);
+}
+
+std::string BoxBlur::description() const
+{
+    return std::format("blur {}", radius_);
 }
 
 } // namespace pixelforge

@@ -25,6 +25,7 @@ build/src/pixelforge images/cat-4k.jpg out.jpg --grayscale --brightness 20
 | `--flip-horizontal` | Mirrors the image left to right |
 | `--flip-vertical` | Mirrors the image top to bottom |
 | `--rotate` | Turns the image 90° clockwise; repeat it for 180° or 270° |
+| `--blur N` | Box blur: replaces each pixel with the average of the pixels up to N (1 to 10) away, a (2N+1) × (2N+1) square |
 | `--time` | Prints how long loading, each filter and saving take |
 
 The output format follows the extension: `.png`, `.jpg` or `.bmp`. The C baseline, `build/baseline_c/pixelforge_c`, takes the same arguments but has only grayscale and brightness.
@@ -33,9 +34,9 @@ The output format follows the extension: `.png`, `.jpg` or `.bmp`. The C baselin
 |---|---|---|
 | ![Original photo](docs/images/cat.jpg) | ![Grayscale](docs/images/cat-grayscale.jpg) | ![Brightness +60](docs/images/cat-brightness-60.jpg) |
 
-| `--negative` | `--threshold 110` |
-|---|---|
-| ![Negative](docs/images/cat-negative.jpg) | ![Threshold at 110](docs/images/cat-threshold-110.jpg) |
+| `--negative` | `--threshold 110` | `--blur 3` |
+|---|---|---|
+| ![Negative](docs/images/cat-negative.jpg) | ![Threshold at 110](docs/images/cat-threshold-110.jpg) | ![Box blur, radius 3](docs/images/cat-blur-3.jpg) |
 
 Photo: "Young tabby cat keeping watch" by W.carter, CC0 ([details](images/README.md)).
 

@@ -11,10 +11,12 @@
 
 #include <algorithm>
 #include <climits>
+#include <cstdlib>
 #include <cstddef>
 #include <cstdint>
 #include <initializer_list>
 #include <memory>
+#include <stdexcept>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -256,6 +258,53 @@ TEST(Filters, RotatingAnEmptyImageGivesAnEmptyImage)
     EXPECT_TRUE(pixelforge::rotate_90(Image()).empty());
 }
 
+// A 3 x 3 image, black except for the middle pixel (90, 30, 0). With radius 1,
+// each pixel averages the pixels of its 3 x 3 window that lie inside the
+// image: 9 in the middle, 6 at an edge, 4 in a corner.
+TEST(Filters, BoxBlurAveragesTheNeighboursInsideTheImage)
+{
+    Image image(3, 3);
+    std::uint8_t* middle = image.data() + 4 * Image::channels;
+    middle[0] = 90;
+    middle[1] = 30;
+    pixelforge::box_blur(image, 1);
+
+    const auto pixel = [&](int x, int y) {
+        const std::uint8_t* p = image.data() + (y * 3 + x) * Image::channels;
+        return std::vector<std::uint8_t>(p, p + Image::channels);
+    };
+    EXPECT_EQ(pixel(1, 1), (std::vector<std::uint8_t>{10, 3, 0})); // 90 / 9, 30 / 9
+    EXPECT_EQ(pixel(1, 0), (std::vector<std::uint8_t>{15, 5, 0})); // 90 / 6, 30 / 6
+    EXPECT_EQ(pixel(0, 0), (std::vector<std::uint8_t>{23, 8, 0})); // 90 / 4 = 22.5, 30 / 4 = 7.5
+}
+
+// Leaving out the neighbours outside the image, instead of counting them as
+// black, keeps the border as bright as the rest.
+TEST(Filters, BoxBlurKeepsAUniformImageUnchanged)
+{
+    Image image(5, 4);
+    std::fill_n(image.data(), image.size(), std::uint8_t{77});
+    pixelforge::box_blur(image, 2);
+    EXPECT_TRUE(std::all_of(image.data(), image.data() + image.size(),
+                            [](std::uint8_t v) { return v == 77; }));
+}
+
+TEST(Filters, BoxBlurWithAHugeRadiusAveragesTheWholeImage)
+{
+    Image image = make_row({0, 0, 0, 60, 60, 60, 90, 90, 90});
+    pixelforge::box_blur(image, 1'000'000);
+    EXPECT_EQ(pixels(image), (std::vector<std::uint8_t>(9, 50)));
+}
+
+TEST(Filters, BoxBlurRadiusZeroChangesNothingAndNegativeThrows)
+{
+    const Image original = make_test_image(6, 5);
+    Image image = original;
+    pixelforge::box_blur(image, 0);
+    EXPECT_EQ(pixels(image), pixels(original));
+    EXPECT_THROW(pixelforge::box_blur(image, -1), std::invalid_argument);
+}
+
 // The filters are templates, so each call below runs the 8-bit or the float
 // version depending on the image. Converting the float result back to 8 bits
 // must give exactly the 8-bit result. (Threshold is left out: a gray level
@@ -279,6 +328,26 @@ TEST(FloatFilters, AgreeWithTheEightBitFilters)
     check("flip horizontal", [](auto& image) { pixelforge::flip_horizontal(image); });
     check("flip vertical", [](auto& image) { pixelforge::flip_vertical(image); });
     check("rotate 90", [](auto& image) { image = pixelforge::rotate_90(image); });
+}
+
+// A blurred 8-bit channel is a rounded mean, and in a corner window of 4 or an
+// edge window of 6 pixels that mean can end in exactly .5. The float result
+// can then round to either side, so here the two may differ by 1.
+TEST(FloatFilters, BoxBlurAgreesWithTheEightBitBlurWithinOne)
+{
+    const Image original = make_test_image(31, 17);
+    Image bytes = original;
+    pixelforge::box_blur(bytes, 2);
+    pixelforge::FloatImage floats = pixelforge::to_float(original);
+    pixelforge::box_blur(floats, 2);
+    const Image from_floats = pixelforge::to_uint8(floats);
+
+    int largest_difference = 0;
+    for (std::size_t i = 0; i < bytes.size(); ++i) {
+        largest_difference = std::max(largest_difference,
+                                      std::abs(int{bytes.data()[i]} - int{from_floats.data()[i]}));
+    }
+    EXPECT_LE(largest_difference, 1);
 }
 
 TEST(FloatFilters, GrayscaleIsNotRounded)
@@ -346,6 +415,7 @@ TEST(FilterObjects, GiveTheSameResultAsTheFunctions)
     check(pixelforge::FlipHorizontal(), [](Image& image) { pixelforge::flip_horizontal(image); });
     check(pixelforge::FlipVertical(), [](Image& image) { pixelforge::flip_vertical(image); });
     check(pixelforge::Rotate90(), [](Image& image) { image = pixelforge::rotate_90(image); });
+    check(pixelforge::BoxBlur(2), [](Image& image) { pixelforge::box_blur(image, 2); });
 }
 
 TEST(FilterObjects, DescribeThemselvesWithTheirSettings)
@@ -357,6 +427,7 @@ TEST(FilterObjects, DescribeThemselvesWithTheirSettings)
     EXPECT_EQ(pixelforge::FlipHorizontal().description(), "flip horizontal");
     EXPECT_EQ(pixelforge::FlipVertical().description(), "flip vertical");
     EXPECT_EQ(pixelforge::Rotate90().description(), "rotate 90");
+    EXPECT_EQ(pixelforge::BoxBlur(3).description(), "blur 3");
 }
 
 // The command line keeps its filters in a list like this one and runs them in
