@@ -1,4 +1,5 @@
-// Tests for the C++ filters in pixelforge/filters.hpp.
+// Tests for the C++ filters in pixelforge/filters.hpp, on 8-bit and float
+// images.
 
 #include <gtest/gtest.h>
 
@@ -253,6 +254,73 @@ TEST(Filters, FourRotationsGiveTheOriginal)
 TEST(Filters, RotatingAnEmptyImageGivesAnEmptyImage)
 {
     EXPECT_TRUE(pixelforge::rotate_90(Image()).empty());
+}
+
+// The filters are templates, so each call below runs the 8-bit or the float
+// version depending on the image. Converting the float result back to 8 bits
+// must give exactly the 8-bit result. (Threshold is left out: a gray level
+// exactly at the limit can land on either side of it in float.)
+TEST(FloatFilters, AgreeWithTheEightBitFilters)
+{
+    const Image original = make_test_image(31, 17);
+    const auto check = [&](const char* name, auto filter) {
+        Image bytes = original;
+        filter(bytes);
+        pixelforge::FloatImage floats = pixelforge::to_float(original);
+        filter(floats);
+        const Image from_floats = pixelforge::to_uint8(floats);
+        EXPECT_EQ(from_floats.width(), bytes.width()) << name;
+        EXPECT_EQ(pixels(from_floats), pixels(bytes)) << name;
+    };
+    check("grayscale", [](auto& image) { pixelforge::grayscale(image); });
+    check("brightness 40", [](auto& image) { pixelforge::brightness(image, 40); });
+    check("brightness -90", [](auto& image) { pixelforge::brightness(image, -90); });
+    check("negative", [](auto& image) { pixelforge::negative(image); });
+    check("flip horizontal", [](auto& image) { pixelforge::flip_horizontal(image); });
+    check("flip vertical", [](auto& image) { pixelforge::flip_vertical(image); });
+    check("rotate 90", [](auto& image) { image = pixelforge::rotate_90(image); });
+}
+
+TEST(FloatFilters, GrayscaleIsNotRounded)
+{
+    pixelforge::FloatImage image(1, 1);
+    image.data()[0] = 0.1f;
+    image.data()[1] = 0.2f;
+    image.data()[2] = 0.4f;
+    pixelforge::grayscale(image);
+    for (int c = 0; c < Image::channels; ++c) {
+        EXPECT_FLOAT_EQ(image.data()[c], 0.7f / 3);
+    }
+}
+
+// The amount is on the 0 to 255 scale: 51 adds 51 / 255 = 0.2.
+TEST(FloatFilters, BrightnessClampsToZeroAndOne)
+{
+    pixelforge::FloatImage image(1, 1);
+    image.data()[0] = 0.9f;
+    image.data()[1] = 0.1f;
+    image.data()[2] = 0.5f;
+
+    pixelforge::brightness(image, 51);
+    EXPECT_FLOAT_EQ(image.data()[0], 1.0f);
+    EXPECT_FLOAT_EQ(image.data()[1], 0.3f);
+    EXPECT_FLOAT_EQ(image.data()[2], 0.7f);
+
+    pixelforge::brightness(image, -255);
+    EXPECT_EQ(image.data()[0], 0.0f);
+    EXPECT_EQ(image.data()[1], 0.0f);
+    EXPECT_EQ(image.data()[2], 0.0f);
+}
+
+// The level is on the 0 to 255 scale too: 128 means 128 / 255, about 0.502.
+TEST(FloatFilters, ThresholdUsesTheLevelOver255)
+{
+    pixelforge::FloatImage image(2, 1);
+    std::fill_n(image.data(), 3, 0.6f);
+    std::fill_n(image.data() + 3, 3, 0.4f);
+    pixelforge::threshold(image, 128);
+    const std::vector<float> expected = {1.0f, 1.0f, 1.0f, 0.0f, 0.0f, 0.0f};
+    EXPECT_TRUE(std::equal(image.data(), image.data() + image.size(), expected.begin()));
 }
 
 // Filter objects are owned through pointers and never copied (see filters.hpp).

@@ -11,72 +11,115 @@ namespace pixelforge {
 
 namespace {
 
-// The rounded average of a pixel's three channels.
-std::uint8_t gray_level(const std::uint8_t* pixel)
-{
-    const unsigned sum = unsigned{pixel[0]} + pixel[1] + pixel[2];
-    return static_cast<std::uint8_t>((sum + 1) / 3);
-}
+// What differs between the two channel types, in one place. The filters below
+// are written once and ask ChannelTraits<T> for these. A class template with a
+// specialization per type like this is called a traits class;
+// std::numeric_limits is one from the standard library.
+template <typename T>
+struct ChannelTraits;
+
+// 8-bit channels. The arithmetic is done in int, which holds results such as
+// 250 + 20 or 10 - 20 before they are clamped, and an average must be rounded
+// to a whole number.
+template <>
+struct ChannelTraits<std::uint8_t> {
+    using Work = int;
+    static constexpr Work max = 255;
+
+    static Work from_setting(int value) { return value; }
+
+    static std::uint8_t average(const std::uint8_t* pixel)
+    {
+        const unsigned sum = unsigned{pixel[0]} + pixel[1] + pixel[2];
+        return static_cast<std::uint8_t>((sum + 1) / 3);
+    }
+};
+
+// float channels from 0.0 to 1.0. A setting on the 0 to 255 scale is divided
+// by 255, and nothing has to be rounded.
+template <>
+struct ChannelTraits<float> {
+    using Work = float;
+    static constexpr Work max = 1.0f;
+
+    static Work from_setting(int value) { return static_cast<float>(value) / 255.0f; }
+
+    static float average(const float* pixel) { return (pixel[0] + pixel[1] + pixel[2]) / 3.0f; }
+};
 
 } // namespace
 
-void grayscale(Image& image)
+template <typename T>
+void grayscale(BasicImage<T>& image)
 {
-    std::uint8_t* p = image.data();
+    T* p = image.data();
     const std::size_t size = image.size();
-    for (std::size_t i = 0; i < size; i += Image::channels) {
-        const std::uint8_t gray = gray_level(p + i);
+    for (std::size_t i = 0; i < size; i += BasicImage<T>::channels) {
+        const T gray = ChannelTraits<T>::average(p + i);
         p[i] = gray;
         p[i + 1] = gray;
         p[i + 2] = gray;
     }
 }
 
-void brightness(Image& image, int amount)
+template <typename T>
+void brightness(BasicImage<T>& image, int amount)
 {
+    using Traits = ChannelTraits<T>;
+    using Work = typename Traits::Work;
+
     // Larger steps change nothing more, and limiting the amount keeps
-    // p[i] + amount far away from int overflow.
-    amount = std::clamp(amount, -255, 255);
+    // p[i] + step far away from int overflow.
+    const Work step = Traits::from_setting(std::clamp(amount, -255, 255));
 
-    std::uint8_t* p = image.data();
+    T* p = image.data();
     const std::size_t size = image.size();
     for (std::size_t i = 0; i < size; ++i) {
-        p[i] = static_cast<std::uint8_t>(std::clamp(p[i] + amount, 0, 255));
+        p[i] = static_cast<T>(std::clamp<Work>(p[i] + step, 0, Traits::max));
     }
 }
 
-void negative(Image& image)
+template <typename T>
+void negative(BasicImage<T>& image)
 {
-    std::uint8_t* p = image.data();
+    T* p = image.data();
     const std::size_t size = image.size();
     for (std::size_t i = 0; i < size; ++i) {
-        p[i] = static_cast<std::uint8_t>(255 - p[i]);
+        p[i] = static_cast<T>(ChannelTraits<T>::max - p[i]);
     }
 }
 
-void threshold(Image& image, int level)
+template <typename T>
+void threshold(BasicImage<T>& image, int level)
 {
-    std::uint8_t* p = image.data();
+    using Traits = ChannelTraits<T>;
+    const typename Traits::Work limit = Traits::from_setting(level);
+    const T white = static_cast<T>(Traits::max);
+
+    T* p = image.data();
     const std::size_t size = image.size();
-    for (std::size_t i = 0; i < size; i += Image::channels) {
-        const std::uint8_t value = gray_level(p + i) >= level ? 255 : 0;
+    for (std::size_t i = 0; i < size; i += BasicImage<T>::channels) {
+        const T value = Traits::average(p + i) >= limit ? white : T{0};
         p[i] = value;
         p[i + 1] = value;
         p[i + 2] = value;
     }
 }
 
-void flip_horizontal(ImageView view)
+template <typename T>
+void flip_horizontal(BasicImageView<T> view)
 {
+    constexpr int channels = BasicImageView<T>::channels;
     for (int y = 0; y < view.height(); ++y) {
         for (int left = 0, right = view.width() - 1; left < right; ++left, --right) {
-            std::swap_ranges(view.pixel(left, y), view.pixel(left, y) + Image::channels,
+            std::swap_ranges(view.pixel(left, y), view.pixel(left, y) + channels,
                              view.pixel(right, y));
         }
     }
 }
 
-void flip_vertical(ImageView view)
+template <typename T>
+void flip_vertical(BasicImageView<T> view)
 {
     for (int top = 0, bottom = view.height() - 1; top < bottom; ++top, --bottom) {
         std::ranges::swap_ranges(view.row(top), view.row(bottom));
@@ -84,22 +127,42 @@ void flip_vertical(ImageView view)
 }
 
 // Column x of the image, read from the bottom up, becomes row x of the result.
-Image rotate_90(const Image& image)
+template <typename T>
+BasicImage<T> rotate_90(const BasicImage<T>& image)
 {
     if (image.empty()) {
-        return Image();
+        return BasicImage<T>();
     }
-    Image rotated(image.height(), image.width());
+    constexpr int channels = BasicImage<T>::channels;
+    BasicImage<T> rotated(image.height(), image.width());
     for (int x = 0; x < image.width(); ++x) {
-        const std::span<std::uint8_t> out = rotated.row(x);
-        const std::size_t column = static_cast<std::size_t>(x) * Image::channels;
+        const std::span<T> out = rotated.row(x);
+        const std::size_t column = static_cast<std::size_t>(x) * channels;
         for (int y = 0; y < image.height(); ++y) {
-            const auto pixel = image.row(image.height() - 1 - y).subspan(column, Image::channels);
-            std::ranges::copy(pixel, out.begin() + y * Image::channels);
+            const auto pixel = image.row(image.height() - 1 - y).subspan(column, channels);
+            std::ranges::copy(pixel, out.begin() + y * channels);
         }
     }
     return rotated;
 }
+
+// Explicit instantiations: the compiler generates each filter for both
+// channel types here, so the declarations in filters.hpp are all other files
+// need.
+template void grayscale(Image&);
+template void grayscale(FloatImage&);
+template void brightness(Image&, int);
+template void brightness(FloatImage&, int);
+template void negative(Image&);
+template void negative(FloatImage&);
+template void threshold(Image&, int);
+template void threshold(FloatImage&, int);
+template void flip_horizontal(ImageView);
+template void flip_horizontal(FloatImageView);
+template void flip_vertical(ImageView);
+template void flip_vertical(FloatImageView);
+template Image rotate_90(const Image&);
+template FloatImage rotate_90(const FloatImage&);
 
 void Grayscale::apply(Image& image) const
 {
