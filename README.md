@@ -6,7 +6,7 @@ A small command-line photo filter program, and a lab for measuring what modern C
 
 pixelforge loads a photo, applies filters such as grayscale, brightness, blur or threshold, and saves the result. The program is rewritten in stages. It starts as plain C with `malloc` and `free`, then moves through RAII, move semantics, views, templates, concepts, data layout, parallelism and lazy evaluation. Each stage gets a git tag (`v0`, `v1`, …) and a benchmark, so any two stages can be compared.
 
-**Status:** v0 (the C baseline), v1 (an `Image` class built on RAII) and v2 (copying versus moving) are done. Next is v3: views that look at part of an image without copying it. The plan is in [docs/ROADMAP.md](docs/ROADMAP.md).
+**Status:** v0 (the C baseline), v1 (an `Image` class built on RAII), v2 (copying versus moving) and v3 (views, flips and rotation) are done. Next is v4: templates, so that the same filters work on 8-bit and floating-point pixels. The plan is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## Usage
 
@@ -69,7 +69,7 @@ build/benchmarks/pixelforge_bench images/cat-4k.jpg 200      # v1
 | v0 | C, `malloc`/`free` | 4.1 ms | 2.2 ms |
 | v1 | C++ `Image` class: RAII, `std::vector`, exceptions | 4.1 ms | 1.8 ms |
 
-Each benchmark run times 200 passes and reports their median. The two benchmarks were run one after the other, three times each, on 2026-11-16; the table shows the middle of the three medians. v2 did not change the filters, so it has no row here.
+Each benchmark run times 200 passes and reports their median. The two benchmarks were run one after the other, three times each, on 2026-11-16; the table shows the middle of the three medians. v2 and v3 did not change these two filters, so they have no rows here.
 
 - **Grayscale** is the same in C and C++. Keeping the pixels in a class with a `std::vector` costs nothing measurable.
 - **Brightness** was about 20% faster in C++ in all three rounds. Both versions process 16 bytes at a time, but their inner loops differ. In C++, `std::clamp(v, 0, 255)` becomes one max and one min per vector. In C, the two `if`s in `clamp_to_byte` become a mask and extra shuffle steps: 23 instructions per 16 bytes instead of 19. That is the likely cause, and it comes from the code the compiler chose, not from the language. Stage v9 compares assembly in detail.
@@ -94,6 +94,26 @@ Measured on 2026-11-18. The first-copy row is the median of five separate proces
 - **A repeated copy into a new image costs no more than one into an existing image**, although it allocates 24.9 MB each time. macOS's allocator keeps the large block the previous copy freed and hands it out again with its memory pages already in place. With that cache turned off (`MallocLargeCache=0`), the same copy took 2.75 ms.
 - **The first copy in a process is the slow one.** Its memory is new, and the system sets up each 16 KB page the first time it is written: about 1,500 pages for one image.
 - **Which returns copy and which move** is checked in [tests/return_value_test.cpp](tests/return_value_test.cpp). Returning a temporary or a single named image costs nothing; `return std::move(image)` costs a move; `return first ? a : b` costs a copy.
+
+### Views, flips and rotation (v3)
+
+```sh
+build/benchmarks/pixelforge_benchmarks --benchmark_filter='crop|flip|rotate' --benchmark_repetitions=5
+```
+
+| Operation on a 3840 × 2160 image (24.9 MB) | Time |
+|---|---|
+| Crop the middle quarter as an `ImageView` | 2.8 ns |
+| Copy that crop (1920 × 1080, 6.2 MB) into a new image | 0.33 ms |
+| Flip top to bottom (`--flip-vertical`) | 0.72 ms |
+| Flip left to right (`--flip-horizontal`) | 10.5 ms |
+| Rotate 90° into a new image (`--rotate`) | 16.1 ms |
+
+Measured on 2026-11-19; each row is the middle of three runs of five repetitions. Between the runs the same row varied by as much as 60% (the vertical flip took 0.67 to 1.05 ms), so the numbers are rough, but the gaps between the rows are much larger.
+
+- **A crop costs a few nanoseconds, whatever its size.** It works out one pointer and checks four numbers. Copying the same region takes about 100,000 times longer, so a crop is copied only when it has to outlive the image or be saved on its own.
+- **The two flips move the same 24.9 MB, but the vertical one is about 15 times faster.** It swaps whole rows, and the compiler turns that into 32-byte vector loads and stores. The horizontal flip swaps one 3-byte pixel at a time, with single-byte loads and stores. That is the likely cause; stage v8 measures it.
+- **The rotation is the slowest, although it also reads and writes each byte once.** It builds each row of the result from a column of the image, so consecutive reads are a whole row (11,520 bytes) apart instead of next to each other. It also allocates the new image each time. Stage v8 is about this kind of memory access order.
 
 ## Third-party code
 

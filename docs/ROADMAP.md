@@ -61,7 +61,7 @@ pixelforge is built in twelve stages. Each stage applies one group of C++ ideas 
 - [x] Rows exposed as `std::span`
 - [x] Filter objects held in `std::unique_ptr`
 - [x] Horizontal flip, vertical flip, 90° rotation
-- [ ] README row, tag `v3`
+- [x] README row, tag `v3`
 
 ## v4 — Templates
 
