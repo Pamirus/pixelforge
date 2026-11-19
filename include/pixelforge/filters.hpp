@@ -1,14 +1,16 @@
 #pragma once
 
 #include "pixelforge/image.hpp"
+#include "pixelforge/image_view.hpp"
 
 #include <string>
 
 namespace pixelforge {
 
-// The filters change the image in place. Grayscale and brightness use the
-// same arithmetic as the C baseline, so their output is identical and their
-// speed can be compared directly.
+// The filters change the image in place, except for the rotation, which
+// returns a new image. Grayscale and brightness use the same arithmetic as the
+// C baseline, so their output is identical and their speed can be compared
+// directly.
 
 // Sets R, G and B of every pixel to their average, rounded to the nearest
 // whole number.
@@ -23,6 +25,17 @@ void negative(Image& image);
 // Makes a pixel white if its gray level (the rounded average of R, G and B) is
 // at least level, and black otherwise.
 void threshold(Image& image, int level);
+
+// Mirrors the pixels left to right. The flips take a view, so they work on a
+// whole image or on a crop of one.
+void flip_horizontal(ImageView view);
+
+// Mirrors the rows top to bottom.
+void flip_vertical(ImageView view);
+
+// The image turned 90 degrees clockwise. Width and height swap, so the result
+// is a new image; the original is not changed.
+[[nodiscard]] Image rotate_90(const Image& image);
 
 // The same filters as objects with a common interface, so that a list of
 // different filters can be built at run time and applied in order. Each
@@ -42,7 +55,7 @@ public:
     // behavior.
     virtual ~Filter() = default;
 
-    // Changes the image in place.
+    // Changes the image. Rotate90 replaces it with a new one of another shape.
     virtual void apply(Image& image) const = 0;
 
     // The filter and its setting, such as "brightness 20".
@@ -79,6 +92,24 @@ public:
 
 private:
     int level_;
+};
+
+class FlipHorizontal : public Filter {
+public:
+    void apply(Image& image) const override;
+    std::string description() const override;
+};
+
+class FlipVertical : public Filter {
+public:
+    void apply(Image& image) const override;
+    std::string description() const override;
+};
+
+class Rotate90 : public Filter {
+public:
+    void apply(Image& image) const override;
+    std::string description() const override;
 };
 
 } // namespace pixelforge

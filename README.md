@@ -22,6 +22,9 @@ build/src/pixelforge images/cat-4k.jpg out.jpg --grayscale --brightness 20
 | `--brightness N` | Adds N (−255 to 255) to every channel |
 | `--negative` | Replaces every channel value v with 255 − v |
 | `--threshold N` | Makes pixels with a gray level of at least N (0 to 255) white, the rest black |
+| `--flip-horizontal` | Mirrors the image left to right |
+| `--flip-vertical` | Mirrors the image top to bottom |
+| `--rotate` | Turns the image 90° clockwise; repeat it for 180° or 270° |
 | `--time` | Prints how long loading, each filter and saving take |
 
 The output format follows the extension: `.png`, `.jpg` or `.bmp`. The C baseline, `build/baseline_c/pixelforge_c`, takes the same arguments but has only grayscale and brightness.

@@ -36,6 +36,9 @@ constexpr std::string_view usage =
     "  --negative        replace every channel value v with 255 - v\n"
     "  --threshold N     white where the gray level is at least N (0..255),\n"
     "                    black elsewhere\n"
+    "  --flip-horizontal mirror left to right\n"
+    "  --flip-vertical   mirror top to bottom\n"
+    "  --rotate          turn 90 degrees clockwise (repeat for 180 or 270)\n"
     "\n"
     "Other options:\n"
     "  --time            print how long loading, each filter and saving take\n"
@@ -102,6 +105,12 @@ Options parse_arguments(const std::vector<std::string_view>& args)
         } else if (arg == "--threshold") {
             options.filters.push_back(
                 std::make_unique<pixelforge::Threshold>(number_after(0, 255)));
+        } else if (arg == "--flip-horizontal") {
+            options.filters.push_back(std::make_unique<pixelforge::FlipHorizontal>());
+        } else if (arg == "--flip-vertical") {
+            options.filters.push_back(std::make_unique<pixelforge::FlipVertical>());
+        } else if (arg == "--rotate") {
+            options.filters.push_back(std::make_unique<pixelforge::Rotate90>());
         } else if (arg == "--time") {
             options.time = true;
         } else {

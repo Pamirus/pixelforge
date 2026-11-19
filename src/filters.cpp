@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <format>
+#include <span>
 #include <string>
 
 namespace pixelforge {
@@ -65,6 +66,41 @@ void threshold(Image& image, int level)
     }
 }
 
+void flip_horizontal(ImageView view)
+{
+    for (int y = 0; y < view.height(); ++y) {
+        for (int left = 0, right = view.width() - 1; left < right; ++left, --right) {
+            std::swap_ranges(view.pixel(left, y), view.pixel(left, y) + Image::channels,
+                             view.pixel(right, y));
+        }
+    }
+}
+
+void flip_vertical(ImageView view)
+{
+    for (int top = 0, bottom = view.height() - 1; top < bottom; ++top, --bottom) {
+        std::ranges::swap_ranges(view.row(top), view.row(bottom));
+    }
+}
+
+// Column x of the image, read from the bottom up, becomes row x of the result.
+Image rotate_90(const Image& image)
+{
+    if (image.empty()) {
+        return Image();
+    }
+    Image rotated(image.height(), image.width());
+    for (int x = 0; x < image.width(); ++x) {
+        const std::span<std::uint8_t> out = rotated.row(x);
+        const std::size_t column = static_cast<std::size_t>(x) * Image::channels;
+        for (int y = 0; y < image.height(); ++y) {
+            const auto pixel = image.row(image.height() - 1 - y).subspan(column, Image::channels);
+            std::ranges::copy(pixel, out.begin() + y * Image::channels);
+        }
+    }
+    return rotated;
+}
+
 void Grayscale::apply(Image& image) const
 {
     grayscale(image);
@@ -103,6 +139,37 @@ void Threshold::apply(Image& image) const
 std::string Threshold::description() const
 {
     return std::format("threshold {}", level_);
+}
+
+void FlipHorizontal::apply(Image& image) const
+{
+    flip_horizontal(image);
+}
+
+std::string FlipHorizontal::description() const
+{
+    return "flip horizontal";
+}
+
+void FlipVertical::apply(Image& image) const
+{
+    flip_vertical(image);
+}
+
+std::string FlipVertical::description() const
+{
+    return "flip vertical";
+}
+
+// The rotated image is a temporary, so assigning it moves its pixels in.
+void Rotate90::apply(Image& image) const
+{
+    image = rotate_90(image);
+}
+
+std::string Rotate90::description() const
+{
+    return "rotate 90";
 }
 
 } // namespace pixelforge

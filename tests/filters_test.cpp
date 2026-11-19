@@ -6,6 +6,7 @@
 #include "pf_image.h"
 #include "pixelforge/filters.hpp"
 #include "pixelforge/image.hpp"
+#include "pixelforge/image_view.hpp"
 
 #include <algorithm>
 #include <climits>
@@ -14,6 +15,7 @@
 #include <initializer_list>
 #include <memory>
 #include <type_traits>
+#include <utility>
 #include <vector>
 
 using pixelforge::Image;
@@ -34,6 +36,17 @@ Image make_row(std::initializer_list<std::uint8_t> channels)
 {
     Image image(static_cast<int>(channels.size() / Image::channels), 1);
     std::copy(channels.begin(), channels.end(), image.data());
+    return image;
+}
+
+// Byte i of the image is i, so every channel of every pixel differs. The
+// images built with it are under 256 bytes.
+Image numbered_image(int width, int height)
+{
+    Image image(width, height);
+    for (std::size_t i = 0; i < image.size(); ++i) {
+        image.data()[i] = static_cast<std::uint8_t>(i);
+    }
     return image;
 }
 
@@ -150,6 +163,98 @@ TEST(Filters, BrightnessMatchesTheCBaseline)
     }
 }
 
+// Pixels move as whole pixels: the channels inside each one keep their order.
+TEST(Filters, FlipHorizontalMirrorsEachRow)
+{
+    Image image = numbered_image(3, 2);
+    pixelforge::flip_horizontal(image);
+    const std::vector<std::uint8_t> expected = {
+        6,  7,  8,  3,  4,  5,  0, 1,  2,  // row 0: pixels 2, 1, 0
+        15, 16, 17, 12, 13, 14, 9, 10, 11, // row 1: pixels 5, 4, 3
+    };
+    EXPECT_EQ(pixels(image), expected);
+}
+
+TEST(Filters, FlipVerticalSwapsTheRows)
+{
+    Image image = numbered_image(2, 3);
+    pixelforge::flip_vertical(image);
+    const std::vector<std::uint8_t> expected = {
+        12, 13, 14, 15, 16, 17, // was row 2
+        6,  7,  8,  9,  10, 11, // row 1 stays
+        0,  1,  2,  3,  4,  5,  // was row 0
+    };
+    EXPECT_EQ(pixels(image), expected);
+}
+
+TEST(Filters, FlippingTwiceGivesTheOriginal)
+{
+    for (const auto [width, height] : {std::pair{7, 5}, std::pair{6, 4}, std::pair{1, 1}}) {
+        const Image original = make_test_image(width, height);
+        Image image = original;
+        pixelforge::flip_horizontal(image);
+        pixelforge::flip_horizontal(image);
+        pixelforge::flip_vertical(image);
+        pixelforge::flip_vertical(image);
+        EXPECT_EQ(pixels(image), pixels(original)) << width << " x " << height;
+    }
+}
+
+// The flips take a view, so they can mirror just part of an image.
+TEST(Filters, FlipsChangeOnlyTheCrop)
+{
+    Image image = numbered_image(4, 3);
+    pixelforge::flip_horizontal(pixelforge::ImageView(image).crop(1, 0, 2, 3));
+    // Pixels 1 and 2 of each row swap; pixels 0 and 3 stay where they are.
+    const std::vector<std::uint8_t> first_row = {0, 1, 2, 6, 7, 8, 3, 4, 5, 9, 10, 11};
+    EXPECT_TRUE(std::ranges::equal(image.row(0), first_row));
+
+    Image other = numbered_image(4, 3);
+    pixelforge::flip_vertical(pixelforge::ImageView(other).crop(0, 1, 4, 2));
+    const Image original = numbered_image(4, 3);
+    EXPECT_TRUE(std::ranges::equal(other.row(0), original.row(0)));
+    EXPECT_TRUE(std::ranges::equal(other.row(1), original.row(2)));
+    EXPECT_TRUE(std::ranges::equal(other.row(2), original.row(1)));
+}
+
+// A 3 x 2 image becomes 2 x 3. Reading pixels as letters:
+//
+//   A B C        D A
+//   D E F   ->   E B
+//                F C
+TEST(Filters, Rotate90TurnsClockwise)
+{
+    const Image image = numbered_image(3, 2);
+    const Image rotated = pixelforge::rotate_90(image);
+
+    EXPECT_EQ(rotated.width(), 2);
+    EXPECT_EQ(rotated.height(), 3);
+    const std::vector<std::uint8_t> expected = {
+        9,  10, 11, 0, 1, 2, // D A
+        12, 13, 14, 3, 4, 5, // E B
+        15, 16, 17, 6, 7, 8, // F C
+    };
+    EXPECT_EQ(pixels(rotated), expected);
+    EXPECT_EQ(pixels(image), pixels(numbered_image(3, 2))); // the original is unchanged
+}
+
+TEST(Filters, FourRotationsGiveTheOriginal)
+{
+    const Image original = make_test_image(7, 5);
+    Image image = original;
+    for (int turn = 0; turn < 4; ++turn) {
+        image = pixelforge::rotate_90(image);
+        EXPECT_EQ(image.width(), turn % 2 == 0 ? 5 : 7);
+    }
+    EXPECT_EQ(image.height(), 5);
+    EXPECT_EQ(pixels(image), pixels(original));
+}
+
+TEST(Filters, RotatingAnEmptyImageGivesAnEmptyImage)
+{
+    EXPECT_TRUE(pixelforge::rotate_90(Image()).empty());
+}
+
 // Filter objects are owned through pointers and never copied (see filters.hpp).
 static_assert(std::is_abstract_v<pixelforge::Filter>);
 static_assert(std::has_virtual_destructor_v<pixelforge::Filter>);
@@ -163,12 +268,16 @@ TEST(FilterObjects, GiveTheSameResultAsTheFunctions)
         Image by_function = original;
         filter.apply(by_object);
         function(by_function);
+        EXPECT_EQ(by_object.width(), by_function.width()) << filter.description();
         EXPECT_EQ(pixels(by_object), pixels(by_function)) << filter.description();
     };
     check(pixelforge::Grayscale(), [](Image& image) { pixelforge::grayscale(image); });
     check(pixelforge::Brightness(-40), [](Image& image) { pixelforge::brightness(image, -40); });
     check(pixelforge::Negative(), [](Image& image) { pixelforge::negative(image); });
     check(pixelforge::Threshold(90), [](Image& image) { pixelforge::threshold(image, 90); });
+    check(pixelforge::FlipHorizontal(), [](Image& image) { pixelforge::flip_horizontal(image); });
+    check(pixelforge::FlipVertical(), [](Image& image) { pixelforge::flip_vertical(image); });
+    check(pixelforge::Rotate90(), [](Image& image) { image = pixelforge::rotate_90(image); });
 }
 
 TEST(FilterObjects, DescribeThemselvesWithTheirSettings)
@@ -177,6 +286,9 @@ TEST(FilterObjects, DescribeThemselvesWithTheirSettings)
     EXPECT_EQ(pixelforge::Brightness(-20).description(), "brightness -20");
     EXPECT_EQ(pixelforge::Negative().description(), "negative");
     EXPECT_EQ(pixelforge::Threshold(128).description(), "threshold 128");
+    EXPECT_EQ(pixelforge::FlipHorizontal().description(), "flip horizontal");
+    EXPECT_EQ(pixelforge::FlipVertical().description(), "flip vertical");
+    EXPECT_EQ(pixelforge::Rotate90().description(), "rotate 90");
 }
 
 // The command line keeps its filters in a list like this one and runs them in

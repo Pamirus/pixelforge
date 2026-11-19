@@ -73,6 +73,8 @@ set_tests_properties(cli.unknown_output_format
 add_test(NAME cli.photo
   COMMAND pixelforge ${PROJECT_SOURCE_DIR}/images/cat-4k.jpg
           ${CMAKE_CURRENT_BINARY_DIR}/cat-4k-all.png
-          --grayscale --brightness 20 --negative --threshold 128 --time)
+          --grayscale --brightness 20 --negative --threshold 128
+          --flip-horizontal --flip-vertical --rotate --time)
 set_tests_properties(cli.photo
-  PROPERTIES PASS_REGULAR_EXPRESSION "threshold 128: [0-9]+\\.[0-9]+ ms.*save: [0-9]+\\.[0-9]+ ms")
+  PROPERTIES PASS_REGULAR_EXPRESSION
+  "threshold 128: [0-9]+\\.[0-9]+ ms.*rotate 90: [0-9]+\\.[0-9]+ ms.*save: [0-9]+\\.[0-9]+ ms")
