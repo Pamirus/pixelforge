@@ -13,6 +13,7 @@
 #include <cstdint>
 #include <initializer_list>
 #include <memory>
+#include <type_traits>
 #include <vector>
 
 using pixelforge::Image;
@@ -147,4 +148,55 @@ TEST(Filters, BrightnessMatchesTheCBaseline)
         pixelforge::brightness(image, amount);
         EXPECT_EQ(pixels(image), expected) << "amount " << amount;
     }
+}
+
+// Filter objects are owned through pointers and never copied (see filters.hpp).
+static_assert(std::is_abstract_v<pixelforge::Filter>);
+static_assert(std::has_virtual_destructor_v<pixelforge::Filter>);
+static_assert(!std::is_copy_constructible_v<pixelforge::Brightness>);
+
+TEST(FilterObjects, GiveTheSameResultAsTheFunctions)
+{
+    const Image original = make_test_image(16, 9);
+    const auto check = [&](const pixelforge::Filter& filter, auto function) {
+        Image by_object = original;
+        Image by_function = original;
+        filter.apply(by_object);
+        function(by_function);
+        EXPECT_EQ(pixels(by_object), pixels(by_function)) << filter.description();
+    };
+    check(pixelforge::Grayscale(), [](Image& image) { pixelforge::grayscale(image); });
+    check(pixelforge::Brightness(-40), [](Image& image) { pixelforge::brightness(image, -40); });
+    check(pixelforge::Negative(), [](Image& image) { pixelforge::negative(image); });
+    check(pixelforge::Threshold(90), [](Image& image) { pixelforge::threshold(image, 90); });
+}
+
+TEST(FilterObjects, DescribeThemselvesWithTheirSettings)
+{
+    EXPECT_EQ(pixelforge::Grayscale().description(), "grayscale");
+    EXPECT_EQ(pixelforge::Brightness(-20).description(), "brightness -20");
+    EXPECT_EQ(pixelforge::Negative().description(), "negative");
+    EXPECT_EQ(pixelforge::Threshold(128).description(), "threshold 128");
+}
+
+// The command line keeps its filters in a list like this one and runs them in
+// order. Brightening a black pixel and then inverting it gives a different
+// result than inverting it first.
+TEST(FilterObjects, AListRunsInOrder)
+{
+    std::vector<std::unique_ptr<pixelforge::Filter>> filters;
+    filters.push_back(std::make_unique<pixelforge::Brightness>(10));
+    filters.push_back(std::make_unique<pixelforge::Negative>());
+
+    const auto run_on_black_pixel = [&] {
+        Image image = make_row({0, 0, 0});
+        for (const auto& filter : filters) {
+            filter->apply(image);
+        }
+        return pixels(image);
+    };
+    EXPECT_EQ(run_on_black_pixel(), (std::vector<std::uint8_t>{245, 245, 245}));
+
+    std::ranges::reverse(filters);
+    EXPECT_EQ(run_on_black_pixel(), (std::vector<std::uint8_t>{255, 255, 255}));
 }

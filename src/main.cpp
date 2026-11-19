@@ -15,6 +15,7 @@
 #include <exception>
 #include <format>
 #include <iostream>
+#include <memory>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -47,17 +48,13 @@ public:
     using std::runtime_error::runtime_error;
 };
 
-enum class FilterKind { grayscale, brightness, negative, threshold };
-
-struct Step {
-    FilterKind kind;
-    int amount = 0; // the brightness amount or the threshold level
-};
-
+// The filters are of different types, so the list holds pointers to their
+// common base class. Each unique_ptr owns its filter and deletes it when the
+// list goes away; Options can therefore be moved but not copied.
 struct Options {
     std::string input;
     std::string output;
-    std::vector<Step> steps;
+    std::vector<std::unique_ptr<pixelforge::Filter>> filters;
     bool time = false;
 };
 
@@ -96,13 +93,15 @@ Options parse_arguments(const std::vector<std::string_view>& args)
         };
 
         if (arg == "--grayscale") {
-            options.steps.push_back({FilterKind::grayscale});
+            options.filters.push_back(std::make_unique<pixelforge::Grayscale>());
         } else if (arg == "--brightness") {
-            options.steps.push_back({FilterKind::brightness, number_after(-255, 255)});
+            options.filters.push_back(
+                std::make_unique<pixelforge::Brightness>(number_after(-255, 255)));
         } else if (arg == "--negative") {
-            options.steps.push_back({FilterKind::negative});
+            options.filters.push_back(std::make_unique<pixelforge::Negative>());
         } else if (arg == "--threshold") {
-            options.steps.push_back({FilterKind::threshold, number_after(0, 255)});
+            options.filters.push_back(
+                std::make_unique<pixelforge::Threshold>(number_after(0, 255)));
         } else if (arg == "--time") {
             options.time = true;
         } else {
@@ -110,39 +109,6 @@ Options parse_arguments(const std::vector<std::string_view>& args)
         }
     }
     return options;
-}
-
-std::string describe(const Step& step)
-{
-    switch (step.kind) {
-    case FilterKind::grayscale:
-        return "grayscale";
-    case FilterKind::brightness:
-        return std::format("brightness {}", step.amount);
-    case FilterKind::negative:
-        return "negative";
-    case FilterKind::threshold:
-        return std::format("threshold {}", step.amount);
-    }
-    return "filter"; // not reached; keeps GCC from warning about a missing return
-}
-
-void apply(Image& image, const Step& step)
-{
-    switch (step.kind) {
-    case FilterKind::grayscale:
-        pixelforge::grayscale(image);
-        break;
-    case FilterKind::brightness:
-        pixelforge::brightness(image, step.amount);
-        break;
-    case FilterKind::negative:
-        pixelforge::negative(image);
-        break;
-    case FilterKind::threshold:
-        pixelforge::threshold(image, step.amount);
-        break;
-    }
 }
 
 // Runs work, timed by a ScopedTimer if timing is on. emplace builds the timer
@@ -161,8 +127,8 @@ void run(const Options& options)
 {
     Image image;
     timed(options.time, "load", [&] { image = pixelforge::load(options.input); });
-    for (const Step& step : options.steps) {
-        timed(options.time, describe(step), [&] { apply(image, step); });
+    for (const auto& filter : options.filters) {
+        timed(options.time, filter->description(), [&] { filter->apply(image); });
     }
     timed(options.time, "save", [&] { pixelforge::save(image, options.output); });
 }
