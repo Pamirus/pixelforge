@@ -6,7 +6,7 @@ A small command-line photo filter program, and a lab for measuring what modern C
 
 pixelforge loads a photo, applies filters such as grayscale, brightness, blur or threshold, and saves the result. The program is rewritten in stages. It starts as plain C with `malloc` and `free`, then moves through RAII, move semantics, views, templates, concepts, data layout, parallelism and lazy evaluation. Each stage gets a git tag (`v0`, `v1`, …) and a benchmark, so any two stages can be compared.
 
-**Status:** v0 (the C baseline), v1 (an `Image` class built on RAII), v2 (copying versus moving), v3 (views, flips and rotation) and v4 (templates for 8-bit and `float` pixels, box blur) are done. Next is v5: moving work to compile time, such as the blur size as a template parameter. The plan is in [docs/ROADMAP.md](docs/ROADMAP.md).
+**Status:** v0 (the C baseline), v1 (an `Image` class built on RAII), v2 (copying versus moving), v3 (views, flips and rotation), v4 (templates for 8-bit and `float` pixels, box blur) and v5 (work moved to compile time) are done. Next is v6: concepts, compared with the older `std::enable_if`. The plan is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## Usage
 
@@ -142,6 +142,25 @@ Measured on 2026-11-20, right after the filter table above; each cell is the mid
 - **The blur takes about as long on `float` pixels as on 8-bit ones**, so memory traffic is not what limits it; the work for each neighbour is.
 
 ### Compile time (v5)
+
+```sh
+build/benchmarks/pixelforge_benchmarks --benchmark_filter='blur|brightness' --benchmark_repetitions=5 --benchmark_enable_random_interleaving=true
+```
+
+| Operation on a 3840 × 2160 image | v4: chosen at run time | v5: fixed at compile time |
+|---|---|---|
+| Box blur 3 × 3, 8-bit pixels | 105 ms | 69 ms |
+| Box blur 5 × 5, 8-bit pixels | 250 ms | 145 ms |
+| Box blur 11 × 11, 8-bit pixels | 1,210 ms | 930 ms |
+| Box blur 3 × 3, `float` pixels | 119 ms | 50 ms |
+| Box blur 5 × 5, `float` pixels | 310 ms | 121 ms |
+| Box blur 11 × 11, `float` pixels | 1,270 ms | 670 ms |
+| Brightness +20, 8-bit pixels: computed, or looked up in a table | 4.7 ms | 11.9 ms |
+
+The v4 column is `box_blur(image, radius)` and the computed brightness; the v5 column is `Blur<Size>` and `brightness_lookup`, whose table comes from the `constexpr` function `brightness_table`. Measured on 2026-11-21, shortly after midnight, while other programs kept about two of the six cores busy; each cell is the middle of three runs of five repetitions. So the times are higher than in the v4 table, and between runs the same cell varied by more than 80%. To keep the comparison fair, the repetitions of all rows ran in random order, and in every run each v5 blur was faster and the table slower than its v4 counterpart.
+
+- **Fixing the blur size at compile time made the blur 1.3 to 2.6 times faster**, least for the largest window. For `Blur<3>` the compiler unrolls the whole 3 × 3 window: on 8-bit pixels its code has 33 single-byte loads, against 3 inside the loops of `box_blur`. Larger windows are unrolled only in part (18 loads for 11 × 11), and gain less. The price is that every size is separate code and must be known when the program is compiled, so `--blur N` keeps the run-time version.
+- **The lookup table made brightness about 2.5 times slower.** The computed version is vectorized: it clamps 16 bytes at a time with one max and one min. A table lookup cannot be vectorized this way, so that loop loads each byte, loads its table entry and stores it, one byte at a time. Building the table takes 256 steps and does not matter. A table would pay off for a costlier formula per value, such as a gamma curve.
 
 The differences between 8-bit and `float` channels, such as rounding and the largest value, live in one traits class, [channel_traits.hpp](include/pixelforge/detail/channel_traits.hpp). Up to v4 it had one specialization per type; v5 makes it a single template whose functions choose their 8-bit or `float` code with `if constexpr`. The compiler throws the other branch away, and the filters compile to the same object file as before, byte for byte.
 
