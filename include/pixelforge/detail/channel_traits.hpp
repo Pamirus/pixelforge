@@ -4,55 +4,70 @@
 // interface: callers include filters.hpp or blur.hpp.
 
 #include <cstdint>
+#include <type_traits>
 
 namespace pixelforge::detail {
 
 // What differs between the two channel types, in one place. The filters are
-// written once and ask ChannelTraits<T> for these. A class template with a
-// specialization per type like this is called a traits class;
-// std::numeric_limits is one from the standard library.
+// written once and ask ChannelTraits<T> for these. A class template like this
+// is called a traits class; std::numeric_limits is one from the standard
+// library.
+//
+// Up to v4 there was one specialization per type. Since v5 there is a single
+// template, and each function chooses its 8-bit or float code with
+// if constexpr. The branch that does not apply is discarded when the template
+// is instantiated. So filters.cpp compiles to the same object file as it did
+// with the specializations, byte for byte, and a branch may hold code that would not compile for the other
+// type: unsigned{pixel[0]} below is an error for a float pixel.
+//
+// 8-bit channels are worked on in int, which holds results such as 250 + 20 or
+// 10 - 20 before they are clamped, and averages are rounded to whole numbers.
+// float channels go from 0.0 to 1.0: a setting on the 0 to 255 scale is
+// divided by 255, and nothing has to be rounded.
 template <typename T>
-struct ChannelTraits;
+struct ChannelTraits {
+    static_assert(std::is_same_v<T, std::uint8_t> || std::is_same_v<T, float>,
+                  "channels are std::uint8_t or float");
 
-// 8-bit channels. The arithmetic is done in int, which holds results such as
-// 250 + 20 or 10 - 20 before they are clamped, and an average must be rounded
-// to a whole number.
-template <>
-struct ChannelTraits<std::uint8_t> {
-    using Work = int;
-    static constexpr Work max = 255;
+    static constexpr bool is_8_bit = std::is_same_v<T, std::uint8_t>;
 
-    static Work from_setting(int value) { return value; }
+    using Work = std::conditional_t<is_8_bit, int, float>;
+    static constexpr Work max = is_8_bit ? Work{255} : Work{1};
 
-    // A sum of many channel values, and its rounded mean. 64 bits hold the
-    // sum of every channel value in any image that fits in memory.
-    using Sum = std::uint64_t;
-    static std::uint8_t mean(Sum sum, int count)
+    // A sum of many channel values. 64 bits hold the sum of every channel
+    // value in any 8-bit image that fits in memory.
+    using Sum = std::conditional_t<is_8_bit, std::uint64_t, float>;
+
+    static Work from_setting(int value)
     {
-        const auto n = static_cast<Sum>(count);
-        return static_cast<std::uint8_t>((sum + n / 2) / n);
+        if constexpr (is_8_bit) {
+            return value;
+        } else {
+            return static_cast<float>(value) / 255.0f;
+        }
     }
 
-    static std::uint8_t average(const std::uint8_t* pixel)
+    // The mean of count channel values that add up to sum.
+    static T mean(Sum sum, int count)
     {
-        const unsigned sum = unsigned{pixel[0]} + pixel[1] + pixel[2];
-        return static_cast<std::uint8_t>((sum + 1) / 3);
+        if constexpr (is_8_bit) {
+            const auto n = static_cast<Sum>(count);
+            return static_cast<T>((sum + n / 2) / n);
+        } else {
+            return sum / static_cast<float>(count);
+        }
     }
-};
 
-// float channels from 0.0 to 1.0. A setting on the 0 to 255 scale is divided
-// by 255, and nothing has to be rounded.
-template <>
-struct ChannelTraits<float> {
-    using Work = float;
-    static constexpr Work max = 1.0f;
-
-    static Work from_setting(int value) { return static_cast<float>(value) / 255.0f; }
-
-    using Sum = float;
-    static float mean(Sum sum, int count) { return sum / static_cast<float>(count); }
-
-    static float average(const float* pixel) { return (pixel[0] + pixel[1] + pixel[2]) / 3.0f; }
+    // The average of the three channels of a pixel.
+    static T average(const T* pixel)
+    {
+        if constexpr (is_8_bit) {
+            const unsigned sum = unsigned{pixel[0]} + pixel[1] + pixel[2];
+            return static_cast<T>((sum + 1) / 3);
+        } else {
+            return (pixel[0] + pixel[1] + pixel[2]) / 3.0f;
+        }
+    }
 };
 
 } // namespace pixelforge::detail
