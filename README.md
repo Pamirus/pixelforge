@@ -6,7 +6,7 @@ A small command-line photo filter program, and a lab for measuring what modern C
 
 pixelforge loads a photo, applies filters such as grayscale, brightness, blur or threshold, and saves the result. The program is rewritten in stages. It starts as plain C with `malloc` and `free`, then moves through RAII, move semantics, views, templates, concepts, data layout, parallelism and lazy evaluation. Each stage gets a git tag (`v0`, `v1`, …) and a benchmark, so any two stages can be compared.
 
-**Status:** v0 (the C baseline), v1 (an `Image` class built on RAII), v2 (copying versus moving) and v3 (views, flips and rotation) are done. Next is v4: templates, so that the same filters work on 8-bit and floating-point pixels. The plan is in [docs/ROADMAP.md](docs/ROADMAP.md).
+**Status:** v0 (the C baseline), v1 (an `Image` class built on RAII), v2 (copying versus moving), v3 (views, flips and rotation) and v4 (templates for 8-bit and `float` pixels, box blur) are done. Next is v5: moving work to compile time, such as the blur size as a template parameter. The plan is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## Usage
 
@@ -62,19 +62,21 @@ Time for one filter pass over the 3840 × 2160 photo (24.9 MB in memory):
 
 ```sh
 build/baseline_c/pixelforge_c_bench images/cat-4k.jpg 200   # v0
-build/benchmarks/pixelforge_bench images/cat-4k.jpg 200      # v1
+build/benchmarks/pixelforge_bench images/cat-4k.jpg 200      # v1 and later, built from that tag
 ```
 
 | Tag | Version | Grayscale | Brightness |
 |---|---|---|---|
-| v0 | C, `malloc`/`free` | 4.1 ms | 2.2 ms |
-| v1 | C++ `Image` class: RAII, `std::vector`, exceptions | 4.1 ms | 1.8 ms |
+| v0 | C, `malloc`/`free` | 6.3 ms | 3.0 ms |
+| v1 | C++ `Image` class: RAII, `std::vector`, exceptions | 6.1 ms | 2.5 ms |
+| v4 | The same filters as templates for 8-bit and `float` pixels | 6.2 ms | 2.5 ms |
 
-Each benchmark run times 200 passes and reports their median. The two benchmarks were run one after the other, three times each, on 2026-11-16; the table shows the middle of the three medians. v2 and v3 did not change these two filters, so they have no rows here.
+Each benchmark run times 200 passes and reports their median. The three benchmarks were run one after the other, three times each, on 2026-11-20; the table shows the middle of the three medians. Another program kept one of the six cores busy throughout, and every row was 35 to 55% slower than on 2026-11-16, when v0 and v1 took 4.1 ms each for grayscale and 2.2 and 1.8 ms for brightness. The rows kept the same order. v2 and v3 did not change these two filters, so they have no rows here.
 
 - **Grayscale** is the same in C and C++. Keeping the pixels in a class with a `std::vector` costs nothing measurable.
-- **Brightness** was about 20% faster in C++ in all three rounds. Both versions process 16 bytes at a time, but their inner loops differ. In C++, `std::clamp(v, 0, 255)` becomes one max and one min per vector. In C, the two `if`s in `clamp_to_byte` become a mask and extra shuffle steps: 23 instructions per 16 bytes instead of 19. That is the likely cause, and it comes from the code the compiler chose, not from the language. Stage v9 compares assembly in detail.
-- **Grayscale takes about twice as long as brightness**, although both touch the same 24.9 MB. Stage v8 looks into why.
+- **The v4 templates** cost nothing either. For 8-bit pixels the compiler turns them into exactly the same machine code as the v1 functions, instruction for instruction, so the v4 row differs from the v1 row only by noise.
+- **Brightness** was 16 to 22% faster in C++ in every round. Both versions process 16 bytes at a time, but their inner loops differ. In C++, `std::clamp(v, 0, 255)` becomes one max and one min per vector. In C, the two `if`s in `clamp_to_byte` become a mask and extra shuffle steps: 23 instructions per 16 bytes instead of 19. That is the likely cause, and it comes from the code the compiler chose, not from the language. Stage v9 compares assembly in detail.
+- **Grayscale takes more than twice as long as brightness**, although both touch the same 24.9 MB. The compiler did not vectorize the grayscale loop: it handles one 3-byte pixel per turn, while the brightness loop works on 16 bytes at a time. Stage v8 looks into why.
 
 ### Copying versus moving (v2)
 
@@ -115,6 +117,29 @@ Measured on 2026-11-19; each row is the middle of three runs of five repetitions
 - **A crop costs a few nanoseconds, whatever its size.** It works out one pointer and checks four numbers. Copying the same region takes about 100,000 times longer, so a crop is copied only when it has to outlive the image or be saved on its own.
 - **The two flips move the same 24.9 MB, but the vertical one is about 15 times faster.** It swaps whole rows, and the compiler turns that into 32-byte vector loads and stores. The horizontal flip swaps one 3-byte pixel at a time, with single-byte loads and stores. That is the likely cause; stage v8 measures it.
 - **The rotation is the slowest, although it also reads and writes each byte once.** It builds each row of the result from a column of the image, so consecutive reads are a whole row (11,520 bytes) apart instead of next to each other. It also allocates the new image each time. Stage v8 is about this kind of memory access order.
+
+### Pixel types and blur (v4)
+
+```sh
+build/benchmarks/pixelforge_benchmarks --benchmark_filter='grayscale|brightness|convert|blur' --benchmark_repetitions=5
+```
+
+| Operation on a 3840 × 2160 image | 8-bit pixels (24.9 MB) | `float` pixels (99.5 MB) |
+|---|---|---|
+| Grayscale | 6.1 ms | 5.7 ms |
+| Brightness +20 | 2.7 ms | 3.8 ms |
+| Convert into a new image of the other type | 5.2 ms | 5.6 ms |
+| Box blur, radius 1 (3 × 3 window) | 74 ms | 67 ms |
+| Box blur, radius 2 (5 × 5 window) | 210 ms | 170 ms |
+| Box blur, radius 5 (11 × 11 window) | 840 ms | 850 ms |
+
+Measured on 2026-11-20, right after the filter table above; each cell is the middle of three runs of five repetitions. Between the runs the same cell varied by as much as 65% (converting to 8-bit took 5.4 to 9.0 ms), so only large gaps mean something.
+
+- **Grayscale takes no longer on `float` pixels, although they are four times the bytes.** The compiler vectorized neither version: both loops handle one pixel per turn, with three loads, the average and three stores. So the time follows the number of pixels, not the number of bytes.
+- **Brightness is vectorized for both types and takes 40% longer on `float` pixels.** For four times the bytes, that is 26 GB/s instead of 9 GB/s.
+- **Converting to `float` and back costs about 11 ms, nearly twice a grayscale pass.** That is worth paying for a chain of filters, converted once at each end, because no filter in the chain rounds its result; for one quick filter it is not.
+- **The blur takes more than ten times as long as grayscale even at radius 1, and its time grows with the window, not the radius.** From radius 1 to 5 the window grows from 9 to 121 pixels and the time by 11 to 13 times. Every pixel reads its whole window, at just under 1 ns per neighbour. Stage v8 moves the border checks out of the inner loop.
+- **The blur takes about as long on `float` pixels as on 8-bit ones**, so memory traffic is not what limits it; the work for each neighbour is.
 
 ## Third-party code
 

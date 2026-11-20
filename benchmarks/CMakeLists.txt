@@ -18,7 +18,7 @@ if(PIXELFORGE_BUILD_BENCHMARKS)
   set(BENCHMARK_ENABLE_WERROR OFF CACHE BOOL "" FORCE)
   FetchContent_MakeAvailable(googlebenchmark)
 
-  add_executable(pixelforge_benchmarks copy_move.cpp views.cpp)
+  add_executable(pixelforge_benchmarks copy_move.cpp views.cpp pixel_types.cpp)
   target_link_libraries(pixelforge_benchmarks PRIVATE
     pixelforge_core benchmark::benchmark_main pixelforge_warnings)
 endif()
