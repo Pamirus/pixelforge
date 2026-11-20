@@ -1,5 +1,6 @@
 // Tests for pixelforge::Blur<Size>, the box blur with its window size fixed at
-// compile time. It must give exactly what box_blur gives with the same window.
+// compile time, which must give exactly what box_blur gives with the same
+// window, and for apply(image, filters...), the filter chain.
 
 #include <gtest/gtest.h>
 
@@ -45,7 +46,7 @@ template <int Size, typename T>
 void expect_same_as_box_blur(const pixelforge::BasicImage<T>& image)
 {
     pixelforge::BasicImage<T> fixed = image;
-    Blur<Size>{}(fixed);
+    Blur<Size>{}.apply(fixed);
     pixelforge::BasicImage<T> chosen_at_run_time = image;
     pixelforge::box_blur(chosen_at_run_time, Size / 2);
     EXPECT_EQ(pixels(fixed), pixels(chosen_at_run_time)) << "Blur<" << Size << ">";
@@ -75,13 +76,72 @@ TEST(Blur, WindowLargerThanTheImageAveragesTheWholeImage)
     Image image(3, 1);
     const std::uint8_t channels[] = {0, 0, 0, 60, 60, 60, 90, 90, 90};
     std::copy(std::begin(channels), std::end(channels), image.data());
-    Blur<21>{}(image);
+    Blur<21>{}.apply(image);
     EXPECT_EQ(pixels(image), std::vector<std::uint8_t>(9, 50));
 }
 
 TEST(Blur, EmptyImageStaysEmpty)
 {
     Image image;
-    Blur<3>{}(image);
+    Blur<3>{}.apply(image);
     EXPECT_TRUE(image.empty());
+}
+
+// apply(image, filters...) runs the filters left to right, exactly as calling
+// them one after the other would.
+TEST(FilterChain, MatchesCallingTheFiltersInOrder)
+{
+    const Image original = make_test_image(19, 11);
+
+    Image chained = original;
+    pixelforge::apply(chained, pixelforge::Grayscale{}, pixelforge::Brightness{20}, Blur<3>{},
+                      pixelforge::Rotate90{});
+
+    Image one_by_one = original;
+    pixelforge::grayscale(one_by_one);
+    pixelforge::brightness(one_by_one, 20);
+    pixelforge::box_blur(one_by_one, 1);
+    one_by_one = pixelforge::rotate_90(one_by_one);
+
+    EXPECT_EQ(chained.width(), 11);
+    EXPECT_EQ(pixels(chained), pixels(one_by_one));
+}
+
+// Brightening and then inverting is not the same as inverting and then
+// brightening, so this shows the order is kept.
+TEST(FilterChain, KeepsTheOrderOfTheFilters)
+{
+    const Image original = make_test_image(4, 3);
+    Image first = original;
+    pixelforge::apply(first, pixelforge::Brightness{100}, pixelforge::Negative{});
+    Image second = original;
+    pixelforge::apply(second, pixelforge::Negative{}, pixelforge::Brightness{100});
+    EXPECT_NE(pixels(first), pixels(second));
+
+    Image expected = original;
+    pixelforge::brightness(expected, 100);
+    pixelforge::negative(expected);
+    EXPECT_EQ(pixels(first), pixels(expected));
+}
+
+TEST(FilterChain, WithNoFiltersChangesNothing)
+{
+    const Image original = make_test_image(5, 2);
+    Image image = original;
+    pixelforge::apply(image);
+    EXPECT_EQ(pixels(image), pixels(original));
+}
+
+// The filter classes take an Image, but Blur<Size> takes either pixel type,
+// so a chain of blurs works on a FloatImage too.
+TEST(FilterChain, WorksOnFloatImagesWithBlurs)
+{
+    const FloatImage original = pixelforge::to_float(make_test_image(9, 7));
+    FloatImage chained = original;
+    pixelforge::apply(chained, Blur<3>{}, Blur<5>{});
+
+    FloatImage one_by_one = original;
+    pixelforge::box_blur(one_by_one, 1);
+    pixelforge::box_blur(one_by_one, 2);
+    EXPECT_EQ(pixels(chained), pixels(one_by_one));
 }

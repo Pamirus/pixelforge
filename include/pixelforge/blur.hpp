@@ -9,8 +9,11 @@
 namespace pixelforge {
 
 // The box blur of filters.hpp with the window size as a template parameter:
-// Blur<3>{}(image) gives the same result as box_blur(image, 1), and
-// Blur<5>{}(image) the same as box_blur(image, 2).
+// Blur<3>{}.apply(image) gives the same result as box_blur(image, 1), and
+// Blur<5>{}.apply(image) the same as box_blur(image, 2). Like the filter
+// classes in filters.hpp it has an apply member, so it can be used in a
+// filter chain: apply(image, Grayscale{}, Blur<3>{}). Unlike them, it has no
+// virtual functions and works on both pixel types.
 //
 // Because the size is part of the type, the compiler knows the loop bounds in
 // every Blur<Size> it generates and can unroll the loops over the window. The
@@ -29,7 +32,7 @@ struct Blur {
     static constexpr int radius = Size / 2;
 
     template <typename T>
-    void operator()(BasicImage<T>& image) const
+    void apply(BasicImage<T>& image) const
     {
         if (image.empty()) {
             return;

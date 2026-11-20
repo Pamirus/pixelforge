@@ -188,4 +188,23 @@ private:
     int radius_;
 };
 
+// A filter chain: applies the filters to the image in the order given, as in
+// apply(image, Grayscale{}, Brightness{20}, Blur<3>{}). Each filter only needs
+// an apply(image) member, so the filter classes above and Blur<Size> from
+// blur.hpp can be mixed. Unlike a list of std::unique_ptr<Filter>, the chain
+// is fixed when the program is compiled and the compiler knows the type of
+// every filter in it. Blur<Size>::apply is then an ordinary call that can be
+// inlined. The filter classes' apply stays virtual, because a class derived
+// from Grayscale could override it; stage v7 looks at that with final.
+//
+// The filters are taken by const reference, so temporaries such as
+// Grayscale{} work and nothing is copied. The comma fold expression below
+// expands to filter1.apply(image), filter2.apply(image), ..., which runs left
+// to right. With no filters it does nothing.
+template <typename T, typename... Filters>
+void apply(BasicImage<T>& image, const Filters&... filters)
+{
+    (filters.apply(image), ...);
+}
+
 } // namespace pixelforge

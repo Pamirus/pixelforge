@@ -75,7 +75,7 @@ pixelforge is built in twelve stages. Each stage applies one group of C++ ideas 
 - [x] Kernel size as a template parameter: `Blur<5>`
 - [x] Brightness lookup table built with `constexpr`
 - [x] `if constexpr` branches for integer and float pixels
-- [ ] Filter chains: `apply(img, Grayscale{}, Blur<3>{})`
+- [x] Filter chains: `apply(img, Grayscale{}, Blur<3>{})`
 - [ ] README row, tag `v5`
 
 ## v6 — Concepts
