@@ -3,6 +3,10 @@
 #include "pixelforge/image.hpp"
 #include "pixelforge/image_view.hpp"
 
+#include <algorithm>
+#include <array>
+#include <cstddef>
+#include <cstdint>
 #include <string>
 
 namespace pixelforge {
@@ -29,6 +33,27 @@ void grayscale(BasicImage<T>& image);
 // Adds amount to every channel. Results are clamped to 0..255 (0.0..1.0).
 template <typename T>
 void brightness(BasicImage<T>& image, int amount);
+
+// The brightness of 8-bit images as a lookup table: entry v is what
+// brightness(image, amount) turns the channel value v into. The function is
+// constexpr, so it can build a table while the program is compiled, as the
+// static_asserts in the tests do, or while it runs.
+[[nodiscard]] constexpr std::array<std::uint8_t, 256> brightness_table(int amount)
+{
+    amount = std::clamp(amount, -255, 255);
+    std::array<std::uint8_t, 256> table{};
+    for (int v = 0; v < 256; ++v) {
+        const int result = std::clamp(v + amount, 0, 255);
+        table[static_cast<std::size_t>(v)] = static_cast<std::uint8_t>(result);
+    }
+    return table;
+}
+
+// The same result as brightness(image, amount), but each channel value is
+// looked up in brightness_table(amount) instead of being computed. Building
+// the table costs 256 steps, against about 25 million channel values in a 4K
+// photo.
+void brightness_lookup(Image& image, int amount);
 
 // Replaces every channel value v with 255 - v (1.0 - v).
 template <typename T>

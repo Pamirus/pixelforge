@@ -3,6 +3,7 @@
 #include "pixelforge/detail/channel_traits.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <format>
@@ -41,6 +42,16 @@ void brightness(BasicImage<T>& image, int amount)
     const std::size_t size = image.size();
     for (std::size_t i = 0; i < size; ++i) {
         p[i] = static_cast<T>(std::clamp<Work>(p[i] + step, 0, Traits::max));
+    }
+}
+
+void brightness_lookup(Image& image, int amount)
+{
+    const std::array<std::uint8_t, 256> table = brightness_table(amount);
+    std::uint8_t* p = image.data();
+    const std::size_t size = image.size();
+    for (std::size_t i = 0; i < size; ++i) {
+        p[i] = table[p[i]];
     }
 }
 

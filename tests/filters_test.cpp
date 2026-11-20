@@ -108,6 +108,33 @@ TEST(Filters, BrightnessHandlesExtremeAmounts)
     EXPECT_EQ(pixels(image), (std::vector<std::uint8_t>{0, 0, 0}));
 }
 
+// brightness_table is constexpr, so these checks run while the test is
+// compiled: a wrong table would stop the build.
+static_assert(pixelforge::brightness_table(0)[0] == 0);
+static_assert(pixelforge::brightness_table(0)[255] == 255);
+static_assert(pixelforge::brightness_table(10)[100] == 110);
+static_assert(pixelforge::brightness_table(10)[250] == 255);
+static_assert(pixelforge::brightness_table(-20)[10] == 0);
+static_assert(pixelforge::brightness_table(INT_MAX)[0] == 255);
+static_assert(pixelforge::brightness_table(INT_MIN)[255] == 0);
+
+// Every amount from beyond -255 to beyond 255, on an image that holds every
+// channel value from 0 to 255.
+TEST(Filters, BrightnessLookupMatchesBrightness)
+{
+    Image all_values(256, 1);
+    for (std::size_t i = 0; i < all_values.size(); ++i) {
+        all_values.data()[i] = static_cast<std::uint8_t>(i / Image::channels);
+    }
+    for (int amount = -300; amount <= 300; ++amount) {
+        Image computed = all_values;
+        pixelforge::brightness(computed, amount);
+        Image looked_up = all_values;
+        pixelforge::brightness_lookup(looked_up, amount);
+        ASSERT_EQ(pixels(looked_up), pixels(computed)) << "amount " << amount;
+    }
+}
+
 TEST(Filters, NegativeInvertsEveryChannel)
 {
     Image image = make_row({0, 1, 255});
