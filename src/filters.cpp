@@ -4,12 +4,14 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <format>
 #include <span>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 namespace pixelforge {
 
@@ -172,6 +174,88 @@ void box_blur(BasicImage<T>& image, int radius)
     }
 }
 
+// The neighbour of a pixel at (x, y), where a position outside the image is
+// replaced by the nearest position inside it.
+template <typename T>
+const T* nearest_pixel(const BasicImage<T>& image, int x, int y)
+{
+    x = std::clamp(x, 0, image.width() - 1);
+    y = std::clamp(y, 0, image.height() - 1);
+    return image.row(y).data() + x * BasicImage<T>::channels;
+}
+
+template <typename T>
+void sharpen(BasicImage<T>& image)
+{
+    if (image.empty()) {
+        return;
+    }
+    using Traits = ChannelTraits<T>;
+    using Work = typename Traits::Work;
+    constexpr int channels = BasicImage<T>::channels;
+
+    // Neighbours must have their original values, so the filter reads a copy.
+    const BasicImage<T> source = image;
+    for (int y = 0; y < image.height(); ++y) {
+        const std::span<T> out = image.row(y);
+        for (int x = 0; x < image.width(); ++x) {
+            const T* centre = nearest_pixel(source, x, y);
+            const T* left = nearest_pixel(source, x - 1, y);
+            const T* right = nearest_pixel(source, x + 1, y);
+            const T* above = nearest_pixel(source, x, y - 1);
+            const T* below = nearest_pixel(source, x, y + 1);
+            for (int c = 0; c < channels; ++c) {
+                const Work value = Work{5} * centre[c] - left[c] - right[c] - above[c] - below[c];
+                out[static_cast<std::size_t>(x) * channels + c] =
+                    static_cast<T>(std::clamp<Work>(value, 0, Traits::max));
+            }
+        }
+    }
+}
+
+template <typename T>
+void sobel(BasicImage<T>& image)
+{
+    if (image.empty()) {
+        return;
+    }
+    using Traits = ChannelTraits<T>;
+    constexpr int channels = BasicImage<T>::channels;
+    const int width = image.width();
+    const int height = image.height();
+
+    // The gray level of every pixel, in the units of the channel type.
+    std::vector<float> gray(static_cast<std::size_t>(width) * height);
+    for (int y = 0; y < height; ++y) {
+        for (int x = 0; x < width; ++x) {
+            gray[static_cast<std::size_t>(y) * width + x] =
+                static_cast<float>(Traits::average(image.row(y).data() + x * channels));
+        }
+    }
+    const auto g = [&](int x, int y) {
+        x = std::clamp(x, 0, width - 1);
+        y = std::clamp(y, 0, height - 1);
+        return gray[static_cast<std::size_t>(y) * width + x];
+    };
+
+    const auto limit = static_cast<float>(Traits::max);
+    for (int y = 0; y < height; ++y) {
+        const std::span<T> out = image.row(y);
+        for (int x = 0; x < width; ++x) {
+            const float gx = (g(x + 1, y - 1) + 2 * g(x + 1, y) + g(x + 1, y + 1)) -
+                             (g(x - 1, y - 1) + 2 * g(x - 1, y) + g(x - 1, y + 1));
+            const float gy = (g(x - 1, y + 1) + 2 * g(x, y + 1) + g(x + 1, y + 1)) -
+                             (g(x - 1, y - 1) + 2 * g(x, y - 1) + g(x + 1, y - 1));
+            const float magnitude = std::min(std::sqrt(gx * gx + gy * gy), limit);
+            // 8-bit values are rounded to the nearest whole number.
+            const T value = static_cast<T>(Traits::is_8_bit ? magnitude + 0.5f : magnitude);
+            for (int c = 0; c < channels; ++c) {
+                out[static_cast<std::size_t>(x) * channels + c] = value;
+            }
+        }
+    }
+}
+
 // Explicit instantiations: the compiler generates each filter for both
 // channel types here, so the declarations in filters.hpp are all other files
 // need.
@@ -191,6 +275,10 @@ template Image rotate_90(const Image&);
 template FloatImage rotate_90(const FloatImage&);
 template void box_blur(Image&, int);
 template void box_blur(FloatImage&, int);
+template void sharpen(Image&);
+template void sharpen(FloatImage&);
+template void sobel(Image&);
+template void sobel(FloatImage&);
 
 void Grayscale::apply(Image& image) const
 {
@@ -271,6 +359,26 @@ void BoxBlur::apply(Image& image) const
 std::string BoxBlur::description() const
 {
     return std::format("blur {}", radius_);
+}
+
+void Sharpen::apply(Image& image) const
+{
+    sharpen(image);
+}
+
+std::string Sharpen::description() const
+{
+    return "sharpen";
+}
+
+void Sobel::apply(Image& image) const
+{
+    sobel(image);
+}
+
+std::string Sobel::description() const
+{
+    return "sobel";
 }
 
 } // namespace pixelforge

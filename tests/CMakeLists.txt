@@ -90,3 +90,9 @@ add_test(NAME cli.blur
           ${CMAKE_CURRENT_BINARY_DIR}/cat-blur.png --blur 2 --time)
 set_tests_properties(cli.blur
   PROPERTIES PASS_REGULAR_EXPRESSION "blur 2: [0-9]+\\.[0-9]+ ms")
+
+add_test(NAME cli.sharpen_sobel
+  COMMAND pixelforge ${PROJECT_SOURCE_DIR}/docs/images/cat.jpg
+          ${CMAKE_CURRENT_BINARY_DIR}/cat-edges.png --sharpen --sobel --time)
+set_tests_properties(cli.sharpen_sobel
+  PROPERTIES PASS_REGULAR_EXPRESSION "sharpen: [0-9]+\\.[0-9]+ ms.*sobel: [0-9]+\\.[0-9]+ ms")

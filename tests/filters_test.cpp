@@ -332,6 +332,100 @@ TEST(Filters, BoxBlurRadiusZeroChangesNothingAndNegativeThrows)
     EXPECT_THROW(pixelforge::box_blur(image, -1), std::invalid_argument);
 }
 
+// A width x height image whose R, G and B are all the given gray values, row by row.
+Image gray_image(int width, int height, std::initializer_list<std::uint8_t> grays)
+{
+    Image image(width, height);
+    auto gray = grays.begin();
+    for (std::size_t i = 0; i < image.size(); i += Image::channels, ++gray) {
+        std::fill_n(image.data() + i, Image::channels, *gray);
+    }
+    return image;
+}
+
+// Five times the pixel minus its four neighbours. A neighbour outside the
+// image is the nearest pixel inside it, and the result is clamped.
+TEST(Filters, SharpenKeepsFlatAreasAndBrightensAnIsolatedPixel)
+{
+    Image flat(4, 3);
+    std::fill_n(flat.data(), flat.size(), std::uint8_t{77});
+    pixelforge::sharpen(flat);
+    EXPECT_TRUE(std::all_of(flat.data(), flat.data() + flat.size(),
+                            [](std::uint8_t v) { return v == 77; }));
+
+    // A white pixel in the middle of a black 3 x 3 image: 5 * 200 - 0 is
+    // clamped to 255, and each neighbour is 5 * 0 - 200, clamped to 0.
+    Image dot(3, 3);
+    std::fill_n(dot.data() + 4 * Image::channels, Image::channels, std::uint8_t{200});
+    pixelforge::sharpen(dot);
+    EXPECT_EQ(pixels(dot).at(4 * 3), 255);
+    for (const int neighbour : {1, 3, 5, 7}) {
+        EXPECT_EQ(pixels(dot).at(neighbour * 3), 0) << "pixel " << neighbour;
+    }
+    for (const int corner : {0, 2, 6, 8}) {
+        EXPECT_EQ(pixels(dot).at(corner * 3), 0) << "pixel " << corner;
+    }
+}
+
+TEST(Filters, SharpenUsesTheNearestPixelOutsideTheBorder)
+{
+    // Pixels 10, 20, 30 in one row. Above and below are the pixel itself.
+    //   10: 5 * 10 - 10 (left) - 20 - 10 - 10 = 0
+    //   20: 5 * 20 - 10 - 30 - 20 - 20        = 20
+    //   30: 5 * 30 - 20 - 30 (right) - 30 - 30 = 40
+    Image image = gray_image(3, 1, {10, 20, 30});
+    pixelforge::sharpen(image);
+    EXPECT_EQ(pixels(image), (std::vector<std::uint8_t>{0, 0, 0, 20, 20, 20, 40, 40, 40}));
+}
+
+// A vertical edge: the left two columns are 0, the right two are 10.
+// At columns 1 and 2, gx = 4 * 10 - 0 = 40 and gy = 0. Elsewhere both are 0.
+TEST(Filters, SobelFindsAVerticalEdge)
+{
+    Image image = gray_image(4, 3, {0, 0, 10, 10, 0, 0, 10, 10, 0, 0, 10, 10});
+    pixelforge::sobel(image);
+    for (int y = 0; y < 3; ++y) {
+        for (int x = 0; x < 4; ++x) {
+            const std::uint8_t expected = (x == 1 || x == 2) ? 40 : 0;
+            const std::uint8_t* p = image.data() + (y * 4 + x) * Image::channels;
+            EXPECT_EQ(p[0], expected) << x << "," << y;
+            EXPECT_EQ(p[1], expected);
+            EXPECT_EQ(p[2], expected);
+        }
+    }
+}
+
+TEST(Filters, SobelFindsAHorizontalEdge)
+{
+    Image image = gray_image(2, 4, {0, 0, 0, 0, 10, 10, 10, 10});
+    pixelforge::sobel(image);
+    for (int y = 0; y < 4; ++y) {
+        const std::uint8_t expected = (y == 1 || y == 2) ? 40 : 0;
+        EXPECT_EQ(image.data()[y * 2 * Image::channels], expected) << "row " << y;
+    }
+}
+
+TEST(Filters, SobelClampsStrongEdgesAndIgnoresFlatAreas)
+{
+    Image edge = gray_image(4, 1, {0, 0, 255, 255});
+    pixelforge::sobel(edge);
+    EXPECT_EQ(edge.data()[1 * Image::channels], 255); // 4 * 255 = 1020, clamped
+
+    Image flat(5, 5);
+    std::fill_n(flat.data(), flat.size(), std::uint8_t{200});
+    pixelforge::sobel(flat);
+    EXPECT_TRUE(std::all_of(flat.data(), flat.data() + flat.size(),
+                            [](std::uint8_t v) { return v == 0; }));
+}
+
+TEST(Filters, SharpenAndSobelLeaveAnEmptyImageEmpty)
+{
+    Image image;
+    pixelforge::sharpen(image);
+    pixelforge::sobel(image);
+    EXPECT_TRUE(image.empty());
+}
+
 // The filters are templates, so each call below runs the 8-bit or the float
 // version depending on the image. Converting the float result back to 8 bits
 // must give exactly the 8-bit result. (Threshold is left out: a gray level
@@ -355,6 +449,31 @@ TEST(FloatFilters, AgreeWithTheEightBitFilters)
     check("flip horizontal", [](auto& image) { pixelforge::flip_horizontal(image); });
     check("flip vertical", [](auto& image) { pixelforge::flip_vertical(image); });
     check("rotate 90", [](auto& image) { image = pixelforge::rotate_90(image); });
+}
+
+// sharpen is exact integer arithmetic on 8 bits and the same sum in float, so
+// the results agree to the rounding of the conversion. In sobel the 8-bit gray
+// level is rounded to a whole number and the float one is not; that error
+// reaches the gradients with weights up to 2 + 1 + 1 on each side, so the
+// results may differ by a few levels.
+TEST(FloatFilters, SharpenAndSobelAgreeWithTheEightBitFilters)
+{
+    const Image original = make_test_image(31, 17);
+    const auto largest_difference = [&](auto filter) {
+        Image bytes = original;
+        filter(bytes);
+        pixelforge::FloatImage floats = pixelforge::to_float(original);
+        filter(floats);
+        const Image from_floats = pixelforge::to_uint8(floats);
+        int largest = 0;
+        for (std::size_t i = 0; i < bytes.size(); ++i) {
+            const int difference = int{bytes.data()[i]} - int{from_floats.data()[i]};
+            largest = std::max(largest, std::abs(difference));
+        }
+        return largest;
+    };
+    EXPECT_LE(largest_difference([](auto& image) { pixelforge::sharpen(image); }), 1);
+    EXPECT_LE(largest_difference([](auto& image) { pixelforge::sobel(image); }), 6);
 }
 
 // A blurred 8-bit channel is a rounded mean, and in a corner window of 4 or an
@@ -443,6 +562,8 @@ TEST(FilterObjects, GiveTheSameResultAsTheFunctions)
     check(pixelforge::FlipVertical(), [](Image& image) { pixelforge::flip_vertical(image); });
     check(pixelforge::Rotate90(), [](Image& image) { image = pixelforge::rotate_90(image); });
     check(pixelforge::BoxBlur(2), [](Image& image) { pixelforge::box_blur(image, 2); });
+    check(pixelforge::Sharpen(), [](Image& image) { pixelforge::sharpen(image); });
+    check(pixelforge::Sobel(), [](Image& image) { pixelforge::sobel(image); });
 }
 
 TEST(FilterObjects, DescribeThemselvesWithTheirSettings)
@@ -455,6 +576,8 @@ TEST(FilterObjects, DescribeThemselvesWithTheirSettings)
     EXPECT_EQ(pixelforge::FlipVertical().description(), "flip vertical");
     EXPECT_EQ(pixelforge::Rotate90().description(), "rotate 90");
     EXPECT_EQ(pixelforge::BoxBlur(3).description(), "blur 3");
+    EXPECT_EQ(pixelforge::Sharpen().description(), "sharpen");
+    EXPECT_EQ(pixelforge::Sobel().description(), "sobel");
 }
 
 // The command line keeps its filters in a list like this one and runs them in

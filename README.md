@@ -26,6 +26,8 @@ build/src/pixelforge images/cat-4k.jpg out.jpg --grayscale --brightness 20
 | `--flip-vertical` | Mirrors the image top to bottom |
 | `--rotate` | Turns the image 90° clockwise; repeat it for 180° or 270° |
 | `--blur N` | Box blur: replaces each pixel with the average of the pixels up to N (1 to 10) away, a (2N+1) × (2N+1) square |
+| `--sharpen` | Makes edges crisper: five times each pixel minus its four neighbours |
+| `--sobel` | Edge detection: bright where the gray level changes fast, black in flat areas |
 | `--time` | Prints how long loading, each filter and saving take |
 
 The output format follows the extension: `.png`, `.jpg` or `.bmp`. The C baseline, `build/baseline_c/pixelforge_c`, takes the same arguments but has only grayscale and brightness.

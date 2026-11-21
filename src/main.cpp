@@ -41,6 +41,8 @@ constexpr std::string_view usage =
     "  --rotate          turn 90 degrees clockwise (repeat for 180 or 270)\n"
     "  --blur N          box blur: average each pixel with the pixels up to N\n"
     "                    (1..10) pixels away\n"
+    "  --sharpen         make edges and details crisper\n"
+    "  --sobel           edge detection: bright where the gray level changes fast\n"
     "\n"
     "Other options:\n"
     "  --time            print how long loading, each filter and saving take\n"
@@ -115,6 +117,10 @@ Options parse_arguments(const std::vector<std::string_view>& args)
             options.filters.push_back(std::make_unique<pixelforge::Rotate90>());
         } else if (arg == "--blur") {
             options.filters.push_back(std::make_unique<pixelforge::BoxBlur>(number_after(1, 10)));
+        } else if (arg == "--sharpen") {
+            options.filters.push_back(std::make_unique<pixelforge::Sharpen>());
+        } else if (arg == "--sobel") {
+            options.filters.push_back(std::make_unique<pixelforge::Sobel>());
         } else if (arg == "--time") {
             options.time = true;
         } else {

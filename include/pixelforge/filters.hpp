@@ -105,6 +105,28 @@ template <typename T>
 template <typename T>
 void box_blur(BasicImage<T>& image, int radius);
 
+// Sharpens the image with the 3 × 3 kernel
+//
+//      0 -1  0
+//     -1  5 -1
+//      0 -1  0
+//
+// applied to each channel: five times the pixel minus its four neighbours,
+// clamped to 0..255 (0.0..1.0). A pixel on the border uses the nearest pixel
+// of the image for a neighbour that is outside it, so a flat area is not
+// changed anywhere.
+template <typename T>
+void sharpen(BasicImage<T>& image);
+
+// Sobel edge detection. The image is turned into gray levels (the average of R,
+// G and B, as in grayscale). Two 3 × 3 kernels measure the change from left to
+// right (gx) and from top to bottom (gy) around each pixel, and the pixel
+// becomes sqrt(gx² + gy²), clamped to 0..255 (0.0..1.0), in R, G and B: bright
+// where the gray level changes fast, black in flat areas. Neighbours outside
+// the image are replaced as in sharpen.
+template <typename T>
+void sobel(BasicImage<T>& image);
+
 // The same filters as objects with a common interface, so that a list of
 // different filters can be built at run time and applied in order. Each
 // object keeps its settings and calls the function above.
@@ -188,6 +210,18 @@ public:
 
 private:
     int radius_;
+};
+
+class Sharpen : public Filter {
+public:
+    void apply(Image& image) const override;
+    std::string description() const override;
+};
+
+class Sobel : public Filter {
+public:
+    void apply(Image& image) const override;
+    std::string description() const override;
 };
 
 namespace detail {
