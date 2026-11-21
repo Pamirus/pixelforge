@@ -6,7 +6,7 @@ A small command-line photo filter program, and a lab for measuring what modern C
 
 pixelforge loads a photo, applies filters such as grayscale, brightness, blur or threshold, and saves the result. The program is rewritten in stages. It starts as plain C with `malloc` and `free`, then moves through RAII, move semantics, views, templates, concepts, data layout, parallelism and lazy evaluation. Each stage gets a git tag (`v0`, `v1`, …) and a benchmark, so any two stages can be compared.
 
-**Status:** v0 (the C baseline), v1 (an `Image` class built on RAII), v2 (copying versus moving), v3 (views, flips and rotation), v4 (templates for 8-bit and `float` pixels, box blur) and v5 (work moved to compile time) are done. Next is v6: concepts, compared with the older `std::enable_if`. The plan is in [docs/ROADMAP.md](docs/ROADMAP.md).
+**Status:** v0 (the C baseline), v1 (an `Image` class built on RAII), v2 (copying versus moving), v3 (views, flips and rotation), v4 (templates for 8-bit and `float` pixels, box blur) and v5 (work moved to compile time) and v6 (concepts, compared with `std::enable_if`) are done. Next is v7: four ways to write one filter, with `virtual`, CRTP, `std::variant` and `std::function`. The plan is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## Usage
 
@@ -165,6 +165,12 @@ The v4 column is `box_blur(image, radius)` and the computed brightness; the v5 c
 The differences between 8-bit and `float` channels, such as rounding and the largest value, live in one traits class, [channel_traits.hpp](include/pixelforge/detail/channel_traits.hpp). Up to v4 it had one specialization per type; v5 makes it a single template whose functions choose their 8-bit or `float` code with `if constexpr`. The compiler throws the other branch away, and the filters compile to the same object file as before, byte for byte.
 
 For two types that differ in a few short functions, the `if constexpr` version reads better: each operation shows both versions next to each other, so the differences are easy to see. The specializations still have two advantages. Each type's rules are in one block, and the type aliases stay plain (`using Work = int;` instead of `std::conditional_t<is_8_bit, int, float>`). A third channel type, such as 16-bit, would also be a new specialization that leaves the others alone, while with `if constexpr` it would add a branch to every function.
+
+### Concepts (v6)
+
+The filter chain `apply(image, filters...)` accepts only types that have a `const` member `apply(image)`. It is written twice: `apply_enable_if` with `std::enable_if` and a `std::void_t` trait, and `apply` with the concept `FilterFor<F, T>`. Tests check at compile time that both accept and reject exactly the same types.
+
+What differs is what the compiler says about a wrong call. Apple Clang 21 names the failing filter and the reason for the concept version (`no member named 'apply' in 'NotAFilter'`), and only the filter for the `enable_if` one. g++ 15.2 reports the concept as one unit over all the filters, without the filter or the reason, but still better than the `enable_if` version, which ends inside `<type_traits>` with `no type named 'type' in 'struct std::enable_if<false, void>'`. So the difference between the two compilers was larger than the difference between the two techniques. The messages and a script to reproduce them are in [docs/error-messages](docs/error-messages/README.md).
 
 ## Third-party code
 
