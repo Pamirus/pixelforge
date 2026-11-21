@@ -6,7 +6,7 @@ A small command-line photo filter program, and a lab for measuring what modern C
 
 pixelforge loads a photo, applies filters such as grayscale, brightness, blur or threshold, and saves the result. The program is rewritten in stages. It starts as plain C with `malloc` and `free`, then moves through RAII, move semantics, views, templates, concepts, data layout, parallelism and lazy evaluation. Each stage gets a git tag (`v0`, `v1`, …) and a benchmark, so any two stages can be compared.
 
-**Status:** v0 (the C baseline), v1 (an `Image` class built on RAII), v2 (copying versus moving), v3 (views, flips and rotation), v4 (templates for 8-bit and `float` pixels, box blur) and v5 (work moved to compile time) and v6 (concepts, compared with `std::enable_if`) are done. Next is v7: four ways to write one filter, with `virtual`, CRTP, `std::variant` and `std::function`. The plan is in [docs/ROADMAP.md](docs/ROADMAP.md).
+**Status:** v0 (the C baseline), v1 (an `Image` class built on RAII), v2 (copying versus moving), v3 (views, flips and rotation), v4 (templates for 8-bit and `float` pixels, box blur) and v5 (work moved to compile time) and v6 (concepts, compared with `std::enable_if`) and v7 (four ways to choose a filter, plus sharpen and Sobel) are done. Next is v8: memory layout, and why some of the loops above are slower than they need to be. The plan is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## Usage
 
@@ -173,6 +173,31 @@ For two types that differ in a few short functions, the `if constexpr` version r
 The filter chain `apply(image, filters...)` accepts only types that have a `const` member `apply(image)`. It is written twice: `apply_enable_if` with `std::enable_if` and a `std::void_t` trait, and `apply` with the concept `FilterFor<F, T>`. Tests check at compile time that both accept and reject exactly the same types.
 
 What differs is what the compiler says about a wrong call. Apple Clang 21 names the failing filter and the reason for the concept version (`no member named 'apply' in 'NotAFilter'`), and only the filter for the `enable_if` one. g++ 15.2 reports the concept as one unit over all the filters, without the filter or the reason, but still better than the `enable_if` version, which ends inside `<type_traits>` with `no type named 'type' in 'struct std::enable_if<false, void>'`. So the difference between the two compilers was larger than the difference between the two techniques. The messages and a script to reproduce them are in [docs/error-messages](docs/error-messages/README.md).
+
+### Polymorphism (v7)
+
+```sh
+build/benchmarks/pixelforge_benchmarks --benchmark_filter='chain|call' --benchmark_repetitions=5 --benchmark_enable_random_interleaving=true
+```
+
+Three filters (brightness, grayscale, negative) are written once as small function objects in [poly.hpp](include/pixelforge/poly.hpp), and four ways of choosing which one runs wrap the same loops: a `virtual` function, CRTP, a `std::variant` and a `std::function`. The benchmark applies all three in a row to a tiny image, where the cost of finding the filter would show, and to the 4K image.
+
+| Chain of three filters | 16 × 9 pixels (432 bytes) | 3840 × 2160 |
+|---|---|---|
+| Called by name, nothing chosen | 114 ns | 6.4 ms |
+| CRTP | 113 ns | 6.5 ms |
+| `virtual` | 123 ns | 7.0 ms |
+| `std::variant` | 123 ns | 7.1 ms |
+| `std::function` | 123 ns | 7.1 ms |
+
+Measured on 2026-11-21, 16:55 to 16:58; each cell is the middle of three runs of five repetitions, with the repetitions of all rows in random order. The machine did not get quiet: for 15 minutes before the runs, background services (`mobileassetd`, `coreduetd`) used 25 to 40% of a core, and right after the runs the busiest process used 0.6%. Between the runs, the same cell varied by up to 8% (the direct call took 112 to 121 ns), which is as much as most of the gaps.
+
+- **The four ways cost about the same.** On the tiny image the whole difference between the fastest and the slowest is 10 ns for three calls, and that is in the range of the run-to-run spread. Even the real cost of an indirect call is a few nanoseconds, against loops that take 24.9 MB of work or more on a photo.
+- **The 4K gaps of about 10% are not the cost of the calls.** Three calls cost nanoseconds and the gap is half a millisecond. When the compiler can see the loops (the first two rows), it may optimize them differently from loops it reaches through a pointer. That is a guess; the assembly of the loops was not compared.
+- **What the four ways allow differs more than what they cost.** `virtual` and `std::function` build a list at run time and accept new filters without changing the code that applies them; `std::variant` also builds a list at run time but needs the whole set of filters named in one place; CRTP needs the chain written out in the code and has no common base class, but its filters also fit the v5 chain (`apply(image, filters...)`). The command line needs a run-time list, so the filters in `filters.hpp` stay `virtual`.
+- **`final` does devirtualize, and it helps little.** One call through a pointer that the compiler cannot see through took 9.5 to 10.0 ns when the class could have subclasses, and 9.35 to 9.50 ns when the class is `final`. In the assembly (Apple Clang 21), the first has one indirect call (`blr`) and the second none: the compiler calls the function directly and inlines it. The gain is about half a nanosecond, because a well-predicted indirect call is cheap on this processor. This answers the question left open in v5: the `apply` of the filter classes is devirtualized only where the compiler knows the object has a `final` class.
+
+`--sharpen` and `--sobel` are new as well: a 3 × 3 sharpening kernel and the Sobel edge detector, which draws only the places where the gray level changes fast.
 
 ## Third-party code
 
