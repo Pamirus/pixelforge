@@ -1,0 +1,121 @@
+Apple clang version 21.0.0 (clang-2100.4.1.1)
+
+=== case 1, concept ===
+docs/error-messages/bad_chain.cpp:29:5: error: no matching function for call to 'apply'
+   29 |     CHAIN(image, pixelforge::Grayscale{}, NotAFilter{}); // not a filter at all
+      |     ^~~~~
+docs/error-messages/bad_chain.cpp:13:15: note: expanded from macro 'CHAIN'
+   13 | #define CHAIN pixelforge::apply
+      |               ^~~~~~~~~~~~~~~~~
+include/pixelforge/filters.hpp:256:6: note: candidate template ignored: constraints not satisfied [with T = unsigned char, Filters = <pixelforge::Grayscale, NotAFilter>]
+  256 | void apply(BasicImage<T>& image, const Filters&... filters)
+      |      ^
+include/pixelforge/filters.hpp:255:23: note: because 'FilterFor<NotAFilter, unsigned char>' evaluated to false
+  255 | template <typename T, FilterFor<T>... Filters>
+      |                       ^
+include/pixelforge/filters.hpp:251:78: note: because 'filter.apply(image)' would be invalid: no member named 'apply' in 'NotAFilter'
+  251 | concept FilterFor = requires(const F& filter, BasicImage<T>& image) { filter.apply(image); };
+      |                                                                              ^
+1 error generated.
+
+=== case 1, enable_if ===
+docs/error-messages/bad_chain.cpp:29:5: error: no matching function for call to 'apply_enable_if'
+   29 |     CHAIN(image, pixelforge::Grayscale{}, NotAFilter{}); // not a filter at all
+      |     ^~~~~
+docs/error-messages/bad_chain.cpp:11:15: note: expanded from macro 'CHAIN'
+   11 | #define CHAIN pixelforge::apply_enable_if
+      |               ^~~~~~~~~~~~~~~~~~~~~~~~~~~
+include/pixelforge/filters.hpp:239:1: note: candidate template ignored: requirement 'detail::is_filter_for_v<NotAFilter, unsigned char>' was not satisfied [with T = unsigned char, Filters = <pixelforge::Grayscale, NotAFilter>]
+  239 | apply_enable_if(BasicImage<T>& image, const Filters&... filters)
+      | ^
+1 error generated.
+
+=== case 2, concept ===
+docs/error-messages/bad_chain.cpp:31:5: error: no matching function for call to 'apply'
+   31 |     CHAIN(image, WrongSignature{}); // apply takes an int, not an image
+      |     ^~~~~
+docs/error-messages/bad_chain.cpp:13:15: note: expanded from macro 'CHAIN'
+   13 | #define CHAIN pixelforge::apply
+      |               ^~~~~~~~~~~~~~~~~
+include/pixelforge/filters.hpp:256:6: note: candidate template ignored: constraints not satisfied [with T = unsigned char, Filters = <WrongSignature>]
+  256 | void apply(BasicImage<T>& image, const Filters&... filters)
+      |      ^
+include/pixelforge/filters.hpp:255:23: note: because 'FilterFor<WrongSignature, unsigned char>' evaluated to false
+  255 | template <typename T, FilterFor<T>... Filters>
+      |                       ^
+include/pixelforge/filters.hpp:251:84: note: because 'filter.apply(image)' would be invalid: no viable conversion from 'BasicImage<unsigned char>' to 'int'
+  251 | concept FilterFor = requires(const F& filter, BasicImage<T>& image) { filter.apply(image); };
+      |                                                                                    ^
+1 error generated.
+
+=== case 2, enable_if ===
+docs/error-messages/bad_chain.cpp:31:5: error: no matching function for call to 'apply_enable_if'
+   31 |     CHAIN(image, WrongSignature{}); // apply takes an int, not an image
+      |     ^~~~~
+docs/error-messages/bad_chain.cpp:11:15: note: expanded from macro 'CHAIN'
+   11 | #define CHAIN pixelforge::apply_enable_if
+      |               ^~~~~~~~~~~~~~~~~~~~~~~~~~~
+include/pixelforge/filters.hpp:239:1: note: candidate template ignored: requirement 'detail::is_filter_for_v<WrongSignature, unsigned char>' was not satisfied [with T = unsigned char, Filters = <WrongSignature>]
+  239 | apply_enable_if(BasicImage<T>& image, const Filters&... filters)
+      | ^
+1 error generated.
+
+=== case 3, concept ===
+docs/error-messages/bad_chain.cpp:33:5: error: no matching function for call to 'apply'
+   33 |     CHAIN(image, NonConstApply{}); // apply is not const
+      |     ^~~~~
+docs/error-messages/bad_chain.cpp:13:15: note: expanded from macro 'CHAIN'
+   13 | #define CHAIN pixelforge::apply
+      |               ^~~~~~~~~~~~~~~~~
+include/pixelforge/filters.hpp:256:6: note: candidate template ignored: constraints not satisfied [with T = unsigned char, Filters = <NonConstApply>]
+  256 | void apply(BasicImage<T>& image, const Filters&... filters)
+      |      ^
+include/pixelforge/filters.hpp:255:23: note: because 'FilterFor<NonConstApply, unsigned char>' evaluated to false
+  255 | template <typename T, FilterFor<T>... Filters>
+      |                       ^
+include/pixelforge/filters.hpp:251:71: note: because 'filter.apply(image)' would be invalid: 'this' argument to member function 'apply' has type 'const NonConstApply', but function is not marked const
+  251 | concept FilterFor = requires(const F& filter, BasicImage<T>& image) { filter.apply(image); };
+      |                                                                       ^
+1 error generated.
+
+=== case 3, enable_if ===
+docs/error-messages/bad_chain.cpp:33:5: error: no matching function for call to 'apply_enable_if'
+   33 |     CHAIN(image, NonConstApply{}); // apply is not const
+      |     ^~~~~
+docs/error-messages/bad_chain.cpp:11:15: note: expanded from macro 'CHAIN'
+   11 | #define CHAIN pixelforge::apply_enable_if
+      |               ^~~~~~~~~~~~~~~~~~~~~~~~~~~
+include/pixelforge/filters.hpp:239:1: note: candidate template ignored: requirement 'detail::is_filter_for_v<NonConstApply, unsigned char>' was not satisfied [with T = unsigned char, Filters = <NonConstApply>]
+  239 | apply_enable_if(BasicImage<T>& image, const Filters&... filters)
+      | ^
+1 error generated.
+
+=== case 4, concept ===
+docs/error-messages/bad_chain.cpp:35:5: error: no matching function for call to 'apply'
+   35 |     CHAIN(floats, pixelforge::Grayscale{}); // a filter class on a float image
+      |     ^~~~~
+docs/error-messages/bad_chain.cpp:13:15: note: expanded from macro 'CHAIN'
+   13 | #define CHAIN pixelforge::apply
+      |               ^~~~~~~~~~~~~~~~~
+include/pixelforge/filters.hpp:256:6: note: candidate template ignored: constraints not satisfied [with T = float, Filters = <pixelforge::Grayscale>]
+  256 | void apply(BasicImage<T>& image, const Filters&... filters)
+      |      ^
+include/pixelforge/filters.hpp:255:23: note: because 'FilterFor<pixelforge::Grayscale, float>' evaluated to false
+  255 | template <typename T, FilterFor<T>... Filters>
+      |                       ^
+include/pixelforge/filters.hpp:251:84: note: because 'filter.apply(image)' would be invalid: non-const lvalue reference to type 'BasicImage<std::uint8_t>' cannot bind to a value of unrelated type 'BasicImage<float>'
+  251 | concept FilterFor = requires(const F& filter, BasicImage<T>& image) { filter.apply(image); };
+      |                                                                                    ^
+1 error generated.
+
+=== case 4, enable_if ===
+docs/error-messages/bad_chain.cpp:35:5: error: no matching function for call to 'apply_enable_if'
+   35 |     CHAIN(floats, pixelforge::Grayscale{}); // a filter class on a float image
+      |     ^~~~~
+docs/error-messages/bad_chain.cpp:11:15: note: expanded from macro 'CHAIN'
+   11 | #define CHAIN pixelforge::apply_enable_if
+      |               ^~~~~~~~~~~~~~~~~~~~~~~~~~~
+include/pixelforge/filters.hpp:239:1: note: candidate template ignored: requirement 'detail::is_filter_for_v<pixelforge::Grayscale, float>' was not satisfied [with T = float, Filters = <pixelforge::Grayscale>]
+  239 | apply_enable_if(BasicImage<T>& image, const Filters&... filters)
+      | ^
+1 error generated.

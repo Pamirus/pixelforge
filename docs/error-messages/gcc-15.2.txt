@@ -1,0 +1,177 @@
+g++ (Ubuntu 15.2.0-16ubuntu1) 15.2.0
+
+=== case 1, concept ===
+docs/error-messages/bad_chain.cpp: In function ‘void run(pixelforge::Image&, pixelforge::FloatImage&)’:
+docs/error-messages/bad_chain.cpp:29:10: error: no matching function for call to ‘apply(pixelforge::Image&, pixelforge::Grayscale, NotAFilter)’
+   29 |     CHAIN(image, pixelforge::Grayscale{}, NotAFilter{}); // not a filter at all
+      |          ^
+docs/error-messages/bad_chain.cpp:29:10: note: there is 1 candidate
+In file included from docs/error-messages/bad_chain.cpp:8:
+include/pixelforge/filters.hpp:256:6: note: candidate 1: ‘template<class T, class ... Filters>  requires (... && FilterFor<Filters, T>) void pixelforge::apply(BasicImage<T>&, const Filters& ...)’
+  256 | void apply(BasicImage<T>& image, const Filters&... filters)
+      |      ^~~~~
+include/pixelforge/filters.hpp:256:6: note: template argument deduction/substitution failed:
+include/pixelforge/filters.hpp:256:6: note: constraints not satisfied
+include/pixelforge/filters.hpp: In substitution of ‘template<class T, class ... Filters>  requires (... && FilterFor<Filters, T>) void pixelforge::apply(BasicImage<T>&, const Filters& ...) [with T = unsigned char; Filters = {pixelforge::Grayscale, NotAFilter}]’:
+docs/error-messages/bad_chain.cpp:29:10:   required from here
+   29 |     CHAIN(image, pixelforge::Grayscale{}, NotAFilter{}); // not a filter at all
+      |          ^
+include/pixelforge/filters.hpp:256:6:   required by the constraints of ‘template<class T, class ... Filters>  requires (... && FilterFor<Filters, T>) void pixelforge::apply(BasicImage<T>&, const Filters& ...)’
+include/pixelforge/filters.hpp:256:6: note: the expression ‘(... && FilterFor<Filters, T>) [with Filters = {pixelforge::Grayscale, NotAFilter}; T = unsigned char]’ evaluated to ‘false’
+  256 | void apply(BasicImage<T>& image, const Filters&... filters)
+      |      ^~~~~
+
+=== case 1, enable_if ===
+docs/error-messages/bad_chain.cpp: In function ‘void run(pixelforge::Image&, pixelforge::FloatImage&)’:
+docs/error-messages/bad_chain.cpp:29:10: error: no matching function for call to ‘apply_enable_if(pixelforge::Image&, pixelforge::Grayscale, NotAFilter)’
+   29 |     CHAIN(image, pixelforge::Grayscale{}, NotAFilter{}); // not a filter at all
+      |          ^
+docs/error-messages/bad_chain.cpp:29:10: note: there is 1 candidate
+In file included from docs/error-messages/bad_chain.cpp:8:
+include/pixelforge/filters.hpp:239:1: note: candidate 1: ‘template<class T, class ... Filters> std::enable_if_t<((bool)(is_filter_for_v<Filters, T> && ...))> pixelforge::apply_enable_if(BasicImage<T>&, const Filters& ...)’
+  239 | apply_enable_if(BasicImage<T>& image, const Filters&... filters)
+      | ^~~~~~~~~~~~~~~
+include/pixelforge/filters.hpp:239:1: note: template argument deduction/substitution failed:
+In file included from include/pixelforge/detail/channel_traits.hpp:7,
+                 from include/pixelforge/blur.hpp:3,
+                 from docs/error-messages/bad_chain.cpp:7:
+/usr/include/c++/15/type_traits: In substitution of ‘template<bool _Cond, class _Tp> using std::enable_if_t = typename std::enable_if::type [with bool _Cond = false; _Tp = void]’:
+include/pixelforge/filters.hpp:239:1:   required by substitution of ‘template<class T, class ... Filters> std::enable_if_t<((bool)(is_filter_for_v<Filters, T> && ...))> pixelforge::apply_enable_if(BasicImage<T>&, const Filters& ...) [with T = unsigned char; Filters = {pixelforge::Grayscale, NotAFilter}]’
+docs/error-messages/bad_chain.cpp:29:10:   required from here
+   29 |     CHAIN(image, pixelforge::Grayscale{}, NotAFilter{}); // not a filter at all
+      |          ^
+/usr/include/c++/15/type_traits:2838:11: error: no type named ‘type’ in ‘struct std::enable_if<false, void>’
+ 2838 |     using enable_if_t = typename enable_if<_Cond, _Tp>::type;
+      |           ^~~~~~~~~~~
+
+=== case 2, concept ===
+docs/error-messages/bad_chain.cpp: In function ‘void run(pixelforge::Image&, pixelforge::FloatImage&)’:
+docs/error-messages/bad_chain.cpp:31:10: error: no matching function for call to ‘apply(pixelforge::Image&, WrongSignature)’
+   31 |     CHAIN(image, WrongSignature{}); // apply takes an int, not an image
+      |          ^
+docs/error-messages/bad_chain.cpp:31:10: note: there is 1 candidate
+In file included from docs/error-messages/bad_chain.cpp:8:
+include/pixelforge/filters.hpp:256:6: note: candidate 1: ‘template<class T, class ... Filters>  requires (... && FilterFor<Filters, T>) void pixelforge::apply(BasicImage<T>&, const Filters& ...)’
+  256 | void apply(BasicImage<T>& image, const Filters&... filters)
+      |      ^~~~~
+include/pixelforge/filters.hpp:256:6: note: template argument deduction/substitution failed:
+include/pixelforge/filters.hpp:256:6: note: constraints not satisfied
+include/pixelforge/filters.hpp: In substitution of ‘template<class T, class ... Filters>  requires (... && FilterFor<Filters, T>) void pixelforge::apply(BasicImage<T>&, const Filters& ...) [with T = unsigned char; Filters = {WrongSignature}]’:
+docs/error-messages/bad_chain.cpp:31:10:   required from here
+   31 |     CHAIN(image, WrongSignature{}); // apply takes an int, not an image
+      |          ^
+include/pixelforge/filters.hpp:256:6:   required by the constraints of ‘template<class T, class ... Filters>  requires (... && FilterFor<Filters, T>) void pixelforge::apply(BasicImage<T>&, const Filters& ...)’
+include/pixelforge/filters.hpp:256:6: note: the expression ‘(... && FilterFor<Filters, T>) [with Filters = {WrongSignature}; T = unsigned char]’ evaluated to ‘false’
+  256 | void apply(BasicImage<T>& image, const Filters&... filters)
+      |      ^~~~~
+
+=== case 2, enable_if ===
+docs/error-messages/bad_chain.cpp: In function ‘void run(pixelforge::Image&, pixelforge::FloatImage&)’:
+docs/error-messages/bad_chain.cpp:31:10: error: no matching function for call to ‘apply_enable_if(pixelforge::Image&, WrongSignature)’
+   31 |     CHAIN(image, WrongSignature{}); // apply takes an int, not an image
+      |          ^
+docs/error-messages/bad_chain.cpp:31:10: note: there is 1 candidate
+In file included from docs/error-messages/bad_chain.cpp:8:
+include/pixelforge/filters.hpp:239:1: note: candidate 1: ‘template<class T, class ... Filters> std::enable_if_t<((bool)(is_filter_for_v<Filters, T> && ...))> pixelforge::apply_enable_if(BasicImage<T>&, const Filters& ...)’
+  239 | apply_enable_if(BasicImage<T>& image, const Filters&... filters)
+      | ^~~~~~~~~~~~~~~
+include/pixelforge/filters.hpp:239:1: note: template argument deduction/substitution failed:
+In file included from include/pixelforge/detail/channel_traits.hpp:7,
+                 from include/pixelforge/blur.hpp:3,
+                 from docs/error-messages/bad_chain.cpp:7:
+/usr/include/c++/15/type_traits: In substitution of ‘template<bool _Cond, class _Tp> using std::enable_if_t = typename std::enable_if::type [with bool _Cond = false; _Tp = void]’:
+include/pixelforge/filters.hpp:239:1:   required by substitution of ‘template<class T, class ... Filters> std::enable_if_t<((bool)(is_filter_for_v<Filters, T> && ...))> pixelforge::apply_enable_if(BasicImage<T>&, const Filters& ...) [with T = unsigned char; Filters = {WrongSignature}]’
+docs/error-messages/bad_chain.cpp:31:10:   required from here
+   31 |     CHAIN(image, WrongSignature{}); // apply takes an int, not an image
+      |          ^
+/usr/include/c++/15/type_traits:2838:11: error: no type named ‘type’ in ‘struct std::enable_if<false, void>’
+ 2838 |     using enable_if_t = typename enable_if<_Cond, _Tp>::type;
+      |           ^~~~~~~~~~~
+
+=== case 3, concept ===
+docs/error-messages/bad_chain.cpp: In function ‘void run(pixelforge::Image&, pixelforge::FloatImage&)’:
+docs/error-messages/bad_chain.cpp:33:10: error: no matching function for call to ‘apply(pixelforge::Image&, NonConstApply)’
+   33 |     CHAIN(image, NonConstApply{}); // apply is not const
+      |          ^
+docs/error-messages/bad_chain.cpp:33:10: note: there is 1 candidate
+In file included from docs/error-messages/bad_chain.cpp:8:
+include/pixelforge/filters.hpp:256:6: note: candidate 1: ‘template<class T, class ... Filters>  requires (... && FilterFor<Filters, T>) void pixelforge::apply(BasicImage<T>&, const Filters& ...)’
+  256 | void apply(BasicImage<T>& image, const Filters&... filters)
+      |      ^~~~~
+include/pixelforge/filters.hpp:256:6: note: template argument deduction/substitution failed:
+include/pixelforge/filters.hpp:256:6: note: constraints not satisfied
+include/pixelforge/filters.hpp: In substitution of ‘template<class T, class ... Filters>  requires (... && FilterFor<Filters, T>) void pixelforge::apply(BasicImage<T>&, const Filters& ...) [with T = unsigned char; Filters = {NonConstApply}]’:
+docs/error-messages/bad_chain.cpp:33:10:   required from here
+   33 |     CHAIN(image, NonConstApply{}); // apply is not const
+      |          ^
+include/pixelforge/filters.hpp:256:6:   required by the constraints of ‘template<class T, class ... Filters>  requires (... && FilterFor<Filters, T>) void pixelforge::apply(BasicImage<T>&, const Filters& ...)’
+include/pixelforge/filters.hpp:256:6: note: the expression ‘(... && FilterFor<Filters, T>) [with Filters = {NonConstApply}; T = unsigned char]’ evaluated to ‘false’
+  256 | void apply(BasicImage<T>& image, const Filters&... filters)
+      |      ^~~~~
+
+=== case 3, enable_if ===
+docs/error-messages/bad_chain.cpp: In function ‘void run(pixelforge::Image&, pixelforge::FloatImage&)’:
+docs/error-messages/bad_chain.cpp:33:10: error: no matching function for call to ‘apply_enable_if(pixelforge::Image&, NonConstApply)’
+   33 |     CHAIN(image, NonConstApply{}); // apply is not const
+      |          ^
+docs/error-messages/bad_chain.cpp:33:10: note: there is 1 candidate
+In file included from docs/error-messages/bad_chain.cpp:8:
+include/pixelforge/filters.hpp:239:1: note: candidate 1: ‘template<class T, class ... Filters> std::enable_if_t<((bool)(is_filter_for_v<Filters, T> && ...))> pixelforge::apply_enable_if(BasicImage<T>&, const Filters& ...)’
+  239 | apply_enable_if(BasicImage<T>& image, const Filters&... filters)
+      | ^~~~~~~~~~~~~~~
+include/pixelforge/filters.hpp:239:1: note: template argument deduction/substitution failed:
+In file included from include/pixelforge/detail/channel_traits.hpp:7,
+                 from include/pixelforge/blur.hpp:3,
+                 from docs/error-messages/bad_chain.cpp:7:
+/usr/include/c++/15/type_traits: In substitution of ‘template<bool _Cond, class _Tp> using std::enable_if_t = typename std::enable_if::type [with bool _Cond = false; _Tp = void]’:
+include/pixelforge/filters.hpp:239:1:   required by substitution of ‘template<class T, class ... Filters> std::enable_if_t<((bool)(is_filter_for_v<Filters, T> && ...))> pixelforge::apply_enable_if(BasicImage<T>&, const Filters& ...) [with T = unsigned char; Filters = {NonConstApply}]’
+docs/error-messages/bad_chain.cpp:33:10:   required from here
+   33 |     CHAIN(image, NonConstApply{}); // apply is not const
+      |          ^
+/usr/include/c++/15/type_traits:2838:11: error: no type named ‘type’ in ‘struct std::enable_if<false, void>’
+ 2838 |     using enable_if_t = typename enable_if<_Cond, _Tp>::type;
+      |           ^~~~~~~~~~~
+
+=== case 4, concept ===
+docs/error-messages/bad_chain.cpp: In function ‘void run(pixelforge::Image&, pixelforge::FloatImage&)’:
+docs/error-messages/bad_chain.cpp:35:10: error: no matching function for call to ‘apply(pixelforge::FloatImage&, pixelforge::Grayscale)’
+   35 |     CHAIN(floats, pixelforge::Grayscale{}); // a filter class on a float image
+      |          ^
+docs/error-messages/bad_chain.cpp:35:10: note: there is 1 candidate
+In file included from docs/error-messages/bad_chain.cpp:8:
+include/pixelforge/filters.hpp:256:6: note: candidate 1: ‘template<class T, class ... Filters>  requires (... && FilterFor<Filters, T>) void pixelforge::apply(BasicImage<T>&, const Filters& ...)’
+  256 | void apply(BasicImage<T>& image, const Filters&... filters)
+      |      ^~~~~
+include/pixelforge/filters.hpp:256:6: note: template argument deduction/substitution failed:
+include/pixelforge/filters.hpp:256:6: note: constraints not satisfied
+include/pixelforge/filters.hpp: In substitution of ‘template<class T, class ... Filters>  requires (... && FilterFor<Filters, T>) void pixelforge::apply(BasicImage<T>&, const Filters& ...) [with T = float; Filters = {pixelforge::Grayscale}]’:
+docs/error-messages/bad_chain.cpp:35:10:   required from here
+   35 |     CHAIN(floats, pixelforge::Grayscale{}); // a filter class on a float image
+      |          ^
+include/pixelforge/filters.hpp:256:6:   required by the constraints of ‘template<class T, class ... Filters>  requires (... && FilterFor<Filters, T>) void pixelforge::apply(BasicImage<T>&, const Filters& ...)’
+include/pixelforge/filters.hpp:256:6: note: the expression ‘(... && FilterFor<Filters, T>) [with Filters = {pixelforge::Grayscale}; T = float]’ evaluated to ‘false’
+  256 | void apply(BasicImage<T>& image, const Filters&... filters)
+      |      ^~~~~
+
+=== case 4, enable_if ===
+docs/error-messages/bad_chain.cpp: In function ‘void run(pixelforge::Image&, pixelforge::FloatImage&)’:
+docs/error-messages/bad_chain.cpp:35:10: error: no matching function for call to ‘apply_enable_if(pixelforge::FloatImage&, pixelforge::Grayscale)’
+   35 |     CHAIN(floats, pixelforge::Grayscale{}); // a filter class on a float image
+      |          ^
+docs/error-messages/bad_chain.cpp:35:10: note: there is 1 candidate
+In file included from docs/error-messages/bad_chain.cpp:8:
+include/pixelforge/filters.hpp:239:1: note: candidate 1: ‘template<class T, class ... Filters> std::enable_if_t<((bool)(is_filter_for_v<Filters, T> && ...))> pixelforge::apply_enable_if(BasicImage<T>&, const Filters& ...)’
+  239 | apply_enable_if(BasicImage<T>& image, const Filters&... filters)
+      | ^~~~~~~~~~~~~~~
+include/pixelforge/filters.hpp:239:1: note: template argument deduction/substitution failed:
+In file included from include/pixelforge/detail/channel_traits.hpp:7,
+                 from include/pixelforge/blur.hpp:3,
+                 from docs/error-messages/bad_chain.cpp:7:
+/usr/include/c++/15/type_traits: In substitution of ‘template<bool _Cond, class _Tp> using std::enable_if_t = typename std::enable_if::type [with bool _Cond = false; _Tp = void]’:
+include/pixelforge/filters.hpp:239:1:   required by substitution of ‘template<class T, class ... Filters> std::enable_if_t<((bool)(is_filter_for_v<Filters, T> && ...))> pixelforge::apply_enable_if(BasicImage<T>&, const Filters& ...) [with T = float; Filters = {pixelforge::Grayscale}]’
+docs/error-messages/bad_chain.cpp:35:10:   required from here
+   35 |     CHAIN(floats, pixelforge::Grayscale{}); // a filter class on a float image
+      |          ^
+/usr/include/c++/15/type_traits:2838:11: error: no type named ‘type’ in ‘struct std::enable_if<false, void>’
+ 2838 |     using enable_if_t = typename enable_if<_Cond, _Tp>::type;
+      |           ^~~~~~~~~~~
