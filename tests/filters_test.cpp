@@ -280,6 +280,38 @@ TEST(Filters, FourRotationsGiveTheOriginal)
     EXPECT_EQ(pixels(image), pixels(original));
 }
 
+// Every width around the block size (16 pixels) and the point where two
+// blocks no longer fit (32), odd and even, so that the block loop, the
+// leftover loop and a width with no middle pixel are all used.
+TEST(Filters, BlockedHorizontalFlipGivesTheSameImageAsTheOtherFlip)
+{
+    for (const int width : {1, 2, 3, 15, 16, 17, 31, 32, 33, 47, 48, 49, 100}) {
+        const Image original = make_test_image(width, 3);
+        Image expected = original;
+        pixelforge::flip_horizontal(expected);
+        Image blocked = original;
+        pixelforge::flip_horizontal_blocked(blocked);
+        EXPECT_EQ(pixels(blocked), pixels(expected)) << "width " << width;
+    }
+}
+
+TEST(Filters, BlockedHorizontalFlipWorksOnACropAndOnFloats)
+{
+    // A crop 40 pixels wide inside a wider image: only its pixels move.
+    const Image original = make_test_image(64, 4);
+    Image expected = original;
+    pixelforge::flip_horizontal(pixelforge::ImageView(expected).crop(10, 1, 40, 2));
+    Image blocked = original;
+    pixelforge::flip_horizontal_blocked(pixelforge::ImageView(blocked).crop(10, 1, 40, 2));
+    EXPECT_EQ(pixels(blocked), pixels(expected));
+
+    pixelforge::FloatImage floats = pixelforge::to_float(make_test_image(37, 2));
+    pixelforge::FloatImage floats_expected = floats;
+    pixelforge::flip_horizontal(floats_expected);
+    pixelforge::flip_horizontal_blocked(floats);
+    EXPECT_TRUE(std::equal(floats.data(), floats.data() + floats.size(), floats_expected.data()));
+}
+
 TEST(Filters, RotatingAnEmptyImageGivesAnEmptyImage)
 {
     EXPECT_TRUE(pixelforge::rotate_90(Image()).empty());

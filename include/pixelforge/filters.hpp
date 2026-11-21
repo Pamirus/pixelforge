@@ -75,6 +75,14 @@ void flip_horizontal(BasicImageView<T> view);
 template <typename T>
 void flip_vertical(BasicImageView<T> view);
 
+// The same result as flip_horizontal, written differently: instead of swapping
+// two pixels at a time it takes a block of 16 pixels from each end of the row
+// into small buffers and writes them back mirrored. It exists to find out why
+// flip_horizontal is slower than flip_vertical (see the v8 results in the
+// README); use flip_horizontal in the rest of the program.
+template <typename T>
+void flip_horizontal_blocked(BasicImageView<T> view);
+
 // Template argument deduction does not look at conversions, so for an image
 // the view overloads above would not be found: T cannot be deduced from
 // BasicImageView<T> when the argument is a BasicImage<T>. These overloads make
@@ -89,6 +97,12 @@ template <typename T>
 void flip_vertical(BasicImage<T>& image)
 {
     flip_vertical(BasicImageView<T>(image));
+}
+
+template <typename T>
+void flip_horizontal_blocked(BasicImage<T>& image)
+{
+    flip_horizontal_blocked(BasicImageView<T>(image));
 }
 
 // The image turned 90 degrees clockwise. Width and height swap, so the result

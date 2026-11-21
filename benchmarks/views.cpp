@@ -65,6 +65,17 @@ void flip_horizontal_image(benchmark::State& state)
     report_bytes(state, static_cast<std::int64_t>(image.size()));
 }
 
+// The same result as flip_horizontal_image, with blocks of 16 pixels.
+void flip_horizontal_blocked_image(benchmark::State& state)
+{
+    Image image(width, height);
+    for (auto _ : state) {
+        pixelforge::flip_horizontal_blocked(image);
+        benchmark::ClobberMemory();
+    }
+    report_bytes(state, static_cast<std::int64_t>(image.size()));
+}
+
 void flip_vertical_image(benchmark::State& state)
 {
     Image image(width, height);
@@ -91,5 +102,6 @@ void rotate_90_image(benchmark::State& state)
 BENCHMARK(crop_view)->Unit(benchmark::kNanosecond);
 BENCHMARK(crop_copy_into_new_image)->Unit(benchmark::kMillisecond);
 BENCHMARK(flip_horizontal_image)->Unit(benchmark::kMillisecond);
+BENCHMARK(flip_horizontal_blocked_image)->Unit(benchmark::kMillisecond);
 BENCHMARK(flip_vertical_image)->Unit(benchmark::kMillisecond);
 BENCHMARK(rotate_90_image)->Unit(benchmark::kMillisecond);

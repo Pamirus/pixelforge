@@ -97,6 +97,40 @@ void flip_horizontal(BasicImageView<T> view)
 }
 
 template <typename T>
+void flip_horizontal_blocked(BasicImageView<T> view)
+{
+    constexpr int channels = BasicImageView<T>::channels;
+    constexpr int block = 16; // pixels
+    for (int y = 0; y < view.height(); ++y) {
+        const std::span<T> row = view.row(y);
+        int left = 0;
+        int right = view.width() - 1;
+
+        // While the two blocks do not overlap: copy both out, write each back
+        // to the other end with its pixels in reverse order.
+        for (; right - left + 1 >= 2 * block; left += block, right -= block) {
+            T* const left_block = row.data() + left * channels;
+            T* const right_block = row.data() + (right - block + 1) * channels;
+            T from_left[block * channels];
+            T from_right[block * channels];
+            std::copy_n(left_block, block * channels, from_left);
+            std::copy_n(right_block, block * channels, from_right);
+            for (int i = 0; i < block; ++i) {
+                std::copy_n(from_right + (block - 1 - i) * channels, channels,
+                            left_block + i * channels);
+                std::copy_n(from_left + (block - 1 - i) * channels, channels,
+                            right_block + i * channels);
+            }
+        }
+        // What is left in the middle, fewer than two blocks, pixel by pixel.
+        for (; left < right; ++left, --right) {
+            std::swap_ranges(row.data() + left * channels,
+                             row.data() + (left + 1) * channels, row.data() + right * channels);
+        }
+    }
+}
+
+template <typename T>
 void flip_vertical(BasicImageView<T> view)
 {
     for (int top = 0, bottom = view.height() - 1; top < bottom; ++top, --bottom) {
@@ -269,6 +303,8 @@ template void threshold(Image&, int);
 template void threshold(FloatImage&, int);
 template void flip_horizontal(ImageView);
 template void flip_horizontal(FloatImageView);
+template void flip_horizontal_blocked(ImageView);
+template void flip_horizontal_blocked(FloatImageView);
 template void flip_vertical(ImageView);
 template void flip_vertical(FloatImageView);
 template Image rotate_90(const Image&);
