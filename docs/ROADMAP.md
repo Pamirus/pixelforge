@@ -87,7 +87,7 @@ pixelforge is built in twelve stages. Each stage applies one group of C++ ideas 
 
 ## v7 — Polymorphism
 
-- [ ] One filter written with `virtual`, CRTP, `std::variant` and `std::function`
+- [x] One filter written with `virtual`, CRTP, `std::variant` and `std::function`
 - [ ] Benchmark the four and check devirtualization with `final`
 - [ ] Sharpen and Sobel edge filters (optional)
 - [ ] README row, tag `v7`
