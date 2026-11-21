@@ -20,6 +20,7 @@ add_executable(pixelforge_tests
   image_test.cpp
   image_view_test.cpp
   io_test.cpp
+  planar_test.cpp
   poly_test.cpp
   return_value_test.cpp
   scoped_timer_test.cpp)

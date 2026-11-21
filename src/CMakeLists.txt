@@ -2,7 +2,8 @@
 add_library(pixelforge_core STATIC
   filters.cpp
   image.cpp
-  io.cpp)
+  io.cpp
+  planar.cpp)
 target_include_directories(pixelforge_core PUBLIC ${PROJECT_SOURCE_DIR}/include)
 target_link_libraries(pixelforge_core PRIVATE stb pixelforge_warnings)
 
