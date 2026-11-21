@@ -12,6 +12,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <iterator>
+#include <utility>
 #include <vector>
 
 using pixelforge::Blur;
@@ -144,4 +145,65 @@ TEST(FilterChain, WorksOnFloatImagesWithBlurs)
     pixelforge::box_blur(one_by_one, 1);
     pixelforge::box_blur(one_by_one, 2);
     EXPECT_EQ(pixels(chained), pixels(one_by_one));
+}
+
+// Which types count as filters is decided at compile time, so these are
+// static_asserts. The filter classes work on 8-bit images, Blur<Size> on both.
+namespace {
+
+struct NotAFilter {};
+
+struct WrongSignature {
+    void apply(int) const {}
+};
+
+// Only a non-const apply: a chain holds its filters by const reference.
+struct NonConstApply {
+    void apply(Image&) {}
+};
+
+template <typename T, typename... Filters, typename = decltype(pixelforge::apply(
+                          std::declval<pixelforge::BasicImage<T>&>(),
+                          std::declval<const Filters&>()...))>
+constexpr bool can_apply_impl(int)
+{
+    return true;
+}
+
+template <typename T, typename... Filters>
+constexpr bool can_apply_impl(...)
+{
+    return false;
+}
+
+// Whether apply(image, filters...) compiles for an image of this type.
+template <typename T, typename... Filters>
+constexpr bool can_apply = can_apply_impl<T, Filters...>(0);
+
+} // namespace
+
+using pixelforge::detail::is_filter_for_v;
+
+static_assert(is_filter_for_v<pixelforge::Grayscale, std::uint8_t>);
+static_assert(is_filter_for_v<Blur<3>, std::uint8_t>);
+static_assert(is_filter_for_v<Blur<3>, float>);
+static_assert(!is_filter_for_v<pixelforge::Grayscale, float>);
+static_assert(!is_filter_for_v<NotAFilter, std::uint8_t>);
+static_assert(!is_filter_for_v<WrongSignature, std::uint8_t>);
+static_assert(!is_filter_for_v<NonConstApply, std::uint8_t>);
+static_assert(!is_filter_for_v<int, std::uint8_t>);
+
+static_assert(can_apply<std::uint8_t>); // an empty chain
+static_assert(can_apply<std::uint8_t, pixelforge::Grayscale, Blur<3>>);
+static_assert(can_apply<float, Blur<3>, Blur<5>>);
+static_assert(!can_apply<float, pixelforge::Grayscale>);
+static_assert(!can_apply<std::uint8_t, NotAFilter>);
+static_assert(!can_apply<std::uint8_t, pixelforge::Grayscale, NotAFilter, Blur<3>>);
+static_assert(!can_apply<std::uint8_t, NonConstApply>);
+
+TEST(FilterChain, ConstraintsAreCheckedWhileCompiling)
+{
+    // The checks above run when this file is compiled; this test only makes
+    // sure the file and its static_asserts are part of the build.
+    SUCCEED();
 }

@@ -8,6 +8,8 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <type_traits>
+#include <utility>
 
 namespace pixelforge {
 
@@ -188,6 +190,27 @@ private:
     int radius_;
 };
 
+namespace detail {
+
+// True if a Filter object of type F can be applied to a BasicImage<T>, that
+// is, if filter.apply(image) is a valid expression for a const filter. This is
+// the pre-C++20 way of asking the question (v6 compares it with a concept):
+// when the expression inside decltype is invalid, substitution fails, the
+// partial specialization is dropped without an error, and the primary
+// template, which says false, is used instead. That is SFINAE.
+template <typename F, typename T, typename = void>
+struct is_filter_for : std::false_type {};
+
+template <typename F, typename T>
+struct is_filter_for<
+    F, T, std::void_t<decltype(std::declval<const F&>().apply(std::declval<BasicImage<T>&>()))>>
+    : std::true_type {};
+
+template <typename F, typename T>
+inline constexpr bool is_filter_for_v = is_filter_for<F, T>::value;
+
+} // namespace detail
+
 // A filter chain: applies the filters to the image in the order given, as in
 // apply(image, Grayscale{}, Brightness{20}, Blur<3>{}). Each filter only needs
 // an apply(image) member, so the filter classes above and Blur<Size> from
@@ -201,8 +224,15 @@ private:
 // Grayscale{} work and nothing is copied. The comma fold expression below
 // expands to filter1.apply(image), filter2.apply(image), ..., which runs left
 // to right. With no filters it does nothing.
+//
+// The enable_if in the return type says that every filter must be applicable
+// to this image. Without it, a type that is not a filter would be reported
+// from inside the fold expression. With it, such a call has no matching
+// function: apply(float_image, Grayscale{}) is rejected, because the filter
+// classes work on 8-bit images only.
 template <typename T, typename... Filters>
-void apply(BasicImage<T>& image, const Filters&... filters)
+std::enable_if_t<(detail::is_filter_for_v<Filters, T> && ...)>
+apply(BasicImage<T>& image, const Filters&... filters)
 {
     (filters.apply(image), ...);
 }
