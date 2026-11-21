@@ -12,6 +12,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <iterator>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -149,6 +150,8 @@ TEST(FilterChain, WorksOnFloatImagesWithBlurs)
 
 // Which types count as filters is decided at compile time, so these are
 // static_asserts. The filter classes work on 8-bit images, Blur<Size> on both.
+// Each check is made for the enable_if version (is_filter_for, apply_enable_if)
+// and for the concept version (FilterFor, apply), and the two must agree.
 namespace {
 
 struct NotAFilter {};
@@ -162,48 +165,86 @@ struct NonConstApply {
     void apply(Image&) {}
 };
 
-template <typename T, typename... Filters, typename = decltype(pixelforge::apply(
-                          std::declval<pixelforge::BasicImage<T>&>(),
-                          std::declval<const Filters&>()...))>
-constexpr bool can_apply_impl(int)
-{
-    return true;
-}
+// The two chains as function objects, so that the same check can be run on
+// both. The decltype in the return type makes a bad call a substitution
+// failure here, not an error.
+struct CallApply {
+    template <typename I, typename... F>
+    auto operator()(I& image, const F&... filters) const
+        -> decltype(pixelforge::apply(image, filters...));
+};
 
-template <typename T, typename... Filters>
-constexpr bool can_apply_impl(...)
-{
-    return false;
-}
+struct CallApplyEnableIf {
+    template <typename I, typename... F>
+    auto operator()(I& image, const F&... filters) const
+        -> decltype(pixelforge::apply_enable_if(image, filters...));
+};
 
-// Whether apply(image, filters...) compiles for an image of this type.
-template <typename T, typename... Filters>
-constexpr bool can_apply = can_apply_impl<T, Filters...>(0);
+template <typename Void, typename Call, typename T, typename... Filters>
+struct can_call_impl : std::false_type {};
+
+template <typename Call, typename T, typename... Filters>
+struct can_call_impl<std::void_t<decltype(std::declval<Call>()(
+                         std::declval<pixelforge::BasicImage<T>&>(),
+                         std::declval<const Filters&>()...))>,
+                     Call, T, Filters...> : std::true_type {};
+
+// Whether the call compiles for an image of this type and these filters.
+template <typename Call, typename T, typename... Filters>
+constexpr bool can_call = can_call_impl<void, Call, T, Filters...>::value;
+
+// True if both versions give the same answer, and that answer is expected.
+template <bool expected, typename T, typename... Filters>
+constexpr bool both_say = can_call<CallApply, T, Filters...> == expected &&
+                          can_call<CallApplyEnableIf, T, Filters...> == expected;
+
+// The concept and the trait on one filter type.
+template <typename F, typename T>
+constexpr bool agree = pixelforge::FilterFor<F, T> == pixelforge::detail::is_filter_for_v<F, T>;
 
 } // namespace
 
-using pixelforge::detail::is_filter_for_v;
+using pixelforge::FilterFor;
 
-static_assert(is_filter_for_v<pixelforge::Grayscale, std::uint8_t>);
-static_assert(is_filter_for_v<Blur<3>, std::uint8_t>);
-static_assert(is_filter_for_v<Blur<3>, float>);
-static_assert(!is_filter_for_v<pixelforge::Grayscale, float>);
-static_assert(!is_filter_for_v<NotAFilter, std::uint8_t>);
-static_assert(!is_filter_for_v<WrongSignature, std::uint8_t>);
-static_assert(!is_filter_for_v<NonConstApply, std::uint8_t>);
-static_assert(!is_filter_for_v<int, std::uint8_t>);
+static_assert(FilterFor<pixelforge::Grayscale, std::uint8_t>);
+static_assert(FilterFor<Blur<3>, std::uint8_t>);
+static_assert(FilterFor<Blur<3>, float>);
+static_assert(!FilterFor<pixelforge::Grayscale, float>);
+static_assert(!FilterFor<NotAFilter, std::uint8_t>);
+static_assert(!FilterFor<WrongSignature, std::uint8_t>);
+static_assert(!FilterFor<NonConstApply, std::uint8_t>);
+static_assert(!FilterFor<int, std::uint8_t>);
 
-static_assert(can_apply<std::uint8_t>); // an empty chain
-static_assert(can_apply<std::uint8_t, pixelforge::Grayscale, Blur<3>>);
-static_assert(can_apply<float, Blur<3>, Blur<5>>);
-static_assert(!can_apply<float, pixelforge::Grayscale>);
-static_assert(!can_apply<std::uint8_t, NotAFilter>);
-static_assert(!can_apply<std::uint8_t, pixelforge::Grayscale, NotAFilter, Blur<3>>);
-static_assert(!can_apply<std::uint8_t, NonConstApply>);
+static_assert(agree<pixelforge::Grayscale, std::uint8_t>);
+static_assert(agree<pixelforge::Grayscale, float>);
+static_assert(agree<Blur<3>, float>);
+static_assert(agree<NotAFilter, std::uint8_t>);
+static_assert(agree<WrongSignature, std::uint8_t>);
+static_assert(agree<NonConstApply, std::uint8_t>);
+static_assert(agree<int, std::uint8_t>);
+
+static_assert(both_say<true, std::uint8_t>); // an empty chain
+static_assert(both_say<true, std::uint8_t, pixelforge::Grayscale, Blur<3>>);
+static_assert(both_say<true, float, Blur<3>, Blur<5>>);
+static_assert(both_say<false, float, pixelforge::Grayscale>);
+static_assert(both_say<false, std::uint8_t, NotAFilter>);
+static_assert(both_say<false, std::uint8_t, pixelforge::Grayscale, NotAFilter, Blur<3>>);
+static_assert(both_say<false, std::uint8_t, NonConstApply>);
 
 TEST(FilterChain, ConstraintsAreCheckedWhileCompiling)
 {
     // The checks above run when this file is compiled; this test only makes
     // sure the file and its static_asserts are part of the build.
     SUCCEED();
+}
+
+TEST(FilterChain, EnableIfAndConceptVersionsGiveTheSameImage)
+{
+    const Image original = make_test_image(17, 9);
+    Image with_concept = original;
+    pixelforge::apply(with_concept, pixelforge::Grayscale{}, Blur<3>{}, pixelforge::Negative{});
+    Image with_enable_if = original;
+    pixelforge::apply_enable_if(with_enable_if, pixelforge::Grayscale{}, Blur<3>{},
+                                pixelforge::Negative{});
+    EXPECT_EQ(pixels(with_concept), pixels(with_enable_if));
 }

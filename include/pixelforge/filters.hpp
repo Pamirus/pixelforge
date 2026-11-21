@@ -212,9 +212,10 @@ inline constexpr bool is_filter_for_v = is_filter_for<F, T>::value;
 } // namespace detail
 
 // A filter chain: applies the filters to the image in the order given, as in
-// apply(image, Grayscale{}, Brightness{20}, Blur<3>{}). Each filter only needs
-// an apply(image) member, so the filter classes above and Blur<Size> from
-// blur.hpp can be mixed. Unlike a list of std::unique_ptr<Filter>, the chain
+// apply(image, Grayscale{}, Brightness{20}, Blur<3>{}). It is written twice,
+// once with std::enable_if (apply_enable_if) and once with a concept (apply).
+// Each filter only needs an apply(image) member, so the filter classes above
+// and Blur<Size> from blur.hpp can be mixed. Unlike a list of std::unique_ptr<Filter>, the chain
 // is fixed when the program is compiled and the compiler knows the type of
 // every filter in it. Blur<Size>::apply is then an ordinary call that can be
 // inlined. The filter classes' apply stays virtual, because a class derived
@@ -228,11 +229,31 @@ inline constexpr bool is_filter_for_v = is_filter_for<F, T>::value;
 // The enable_if in the return type says that every filter must be applicable
 // to this image. Without it, a type that is not a filter would be reported
 // from inside the fold expression. With it, such a call has no matching
-// function: apply(float_image, Grayscale{}) is rejected, because the filter
-// classes work on 8-bit images only.
+// function: apply_enable_if(float_image, Grayscale{}) is rejected, because the
+// filter classes work on 8-bit images only.
+//
+// This is the version from before C++20, kept next to the concept version
+// below so the two can be compared. Use apply in new code.
 template <typename T, typename... Filters>
 std::enable_if_t<(detail::is_filter_for_v<Filters, T> && ...)>
-apply(BasicImage<T>& image, const Filters&... filters)
+apply_enable_if(BasicImage<T>& image, const Filters&... filters)
+{
+    (filters.apply(image), ...);
+}
+
+// The same constraint as a C++20 concept: a type F is a filter for images of
+// channel type T if filter.apply(image) is valid for a const filter and a
+// BasicImage<T>&. It accepts and rejects the same types as
+// detail::is_filter_for, but reads as what it says, and the compiler can name
+// it in its error messages. (It is not called Filter, which is the abstract
+// class above.)
+template <typename F, typename T>
+concept FilterFor = requires(const F& filter, BasicImage<T>& image) { filter.apply(image); };
+
+// The filter chain, constrained with the concept. FilterFor<T>... means that
+// each of the filters satisfies FilterFor<Filter, T>.
+template <typename T, FilterFor<T>... Filters>
+void apply(BasicImage<T>& image, const Filters&... filters)
 {
     (filters.apply(image), ...);
 }

@@ -17,8 +17,9 @@ namespace pixelforge::detail {
 // template, and each function chooses its 8-bit or float code with
 // if constexpr. The branch that does not apply is discarded when the template
 // is instantiated. So filters.cpp compiles to the same object file as it did
-// with the specializations, byte for byte, and a branch may hold code that would not compile for the other
-// type: unsigned{pixel[0]} below is an error for a float pixel.
+// with the specializations, byte for byte, and a branch may hold code that
+// would not compile for the other type: unsigned{pixel[0]} below is an error
+// for a float pixel.
 //
 // 8-bit channels are worked on in int, which holds results such as 250 + 20 or
 // 10 - 20 before they are clamped, and averages are rounded to whole numbers.

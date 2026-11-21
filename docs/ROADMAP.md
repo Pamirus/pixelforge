@@ -81,7 +81,7 @@ pixelforge is built in twelve stages. Each stage applies one group of C++ ideas 
 ## v6 — Concepts
 
 - [x] Constrain `apply` with `std::enable_if`
-- [ ] The same constraint as `concept Filter`
+- [x] The same constraint as `concept Filter`
 - [ ] Compare the compiler error messages of both in `docs/`
 - [ ] Tag `v6`
 
