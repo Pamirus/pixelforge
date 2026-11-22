@@ -98,7 +98,7 @@ pixelforge is built in twelve stages. Each stage applies one group of C++ ideas 
 - [x] Horizontal vs vertical flip timing
 - [x] Blur with the border checks moved out of the inner loop
 - [x] Read the compiler's vectorization report
-- [ ] README row, tag `v8`
+- [x] README row, tag `v8`
 
 ## v9 — Zero-cost abstraction
 

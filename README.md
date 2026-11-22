@@ -6,7 +6,7 @@ A small command-line photo filter program, and a lab for measuring what modern C
 
 pixelforge loads a photo, applies filters such as grayscale, brightness, blur or threshold, and saves the result. The program is rewritten in stages. It starts as plain C with `malloc` and `free`, then moves through RAII, move semantics, views, templates, concepts, data layout, parallelism and lazy evaluation. Each stage gets a git tag (`v0`, `v1`, …) and a benchmark, so any two stages can be compared.
 
-**Status:** v0 (the C baseline), v1 (an `Image` class built on RAII), v2 (copying versus moving), v3 (views, flips and rotation), v4 (templates for 8-bit and `float` pixels, box blur) and v5 (work moved to compile time) and v6 (concepts, compared with `std::enable_if`) and v7 (four ways to choose a filter, plus sharpen and Sobel) are done. Next is v8: memory layout, and why some of the loops above are slower than they need to be. The plan is in [docs/ROADMAP.md](docs/ROADMAP.md).
+**Status:** v0 (the C baseline), v1 (an `Image` class built on RAII), v2 (copying versus moving), v3 (views, flips and rotation), v4 (templates for 8-bit and `float` pixels, box blur) and v5 (work moved to compile time) and v6 (concepts, compared with `std::enable_if`) and v7 (four ways to choose a filter, plus sharpen and Sobel) and v8 (memory layout and the vectorization report) are done. Next is v9: zero-cost abstraction, checked in the assembly. The plan is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## Usage
 
@@ -198,6 +198,46 @@ Measured on 2026-11-21, 16:55 to 16:58; each cell is the middle of three runs of
 - **`final` does devirtualize, and it helps little.** One call through a pointer that the compiler cannot see through took 9.5 to 10.0 ns when the class could have subclasses, and 9.35 to 9.50 ns when the class is `final`. In the assembly (Apple Clang 21), the first has one indirect call (`blr`) and the second none: the compiler calls the function directly and inlines it. The gain is about half a nanosecond, because a well-predicted indirect call is cheap on this processor. This answers the question left open in v5: the `apply` of the filter classes is devirtualized only where the compiler knows the object has a `final` class.
 
 `--sharpen` and `--sobel` are new as well: a 3 × 3 sharpening kernel and the Sobel edge detector, which draws only the places where the gray level changes fast.
+
+### Memory layout (v8)
+
+```sh
+build/benchmarks/pixelforge_benchmarks --benchmark_filter='planar|interleaved|flip|clipped' --benchmark_repetitions=5 --benchmark_enable_random_interleaving=true
+```
+
+All numbers are for the 3840 × 2160, 8-bit image, the middle of three runs of five repetitions with the repetitions in random order. The machine was **not quiet** in the layout and flip runs: VS Code's `cpptools` used about 96% of one core during both (and `godot` 99% at the end of the flip run), so those two tables are noisier than the blur table, which was measured on 2026-11-22 after about five minutes of waiting for quiet.
+
+**Interleaved against planar** (`PlanarImage` keeps three planes `RRR…GGG…BBB…` in one block; measured 2026-11-21, 21:42 to 21:44):
+
+| Operation | Interleaved `Image` | Planar `PlanarImage` |
+|---|---|---|
+| Grayscale | 7.00 ms | 2.92 ms (2.4×) |
+| Brightness, all channels | 2.77 ms | 2.75 ms |
+| Brighten only the red channel | 4.43 ms | 1.01 ms (4.4×) |
+| Convert to the other layout | 1.42 ms | 1.38 ms |
+
+**Flips** (2026-11-21, 22:48 to 22:49):
+
+| Operation | Time |
+|---|---|
+| Copy into an existing image (reference) | 0.96 ms |
+| Vertical flip | 0.90 ms |
+| Horizontal flip, pixel by pixel | 7.78 ms |
+| Horizontal flip, 16-pixel blocks | 5.52 ms |
+
+**Box blur with the window clipped once per pixel** (`box_blur_clipped`, 2026-11-22, 11:04 to 11:07; the same pixels as `box_blur`, checked by tests):
+
+| Radius | 8-bit `box_blur` | 8-bit clipped | `float` `box_blur` | `float` clipped |
+|---|---|---|---|---|
+| 1 (3 × 3) | 63.7 ms | 43.7 ms | 55.1 ms | 35.6 ms |
+| 2 (5 × 5) | 174 ms | 95.4 ms | 119 ms | 80.8 ms |
+| 5 (11 × 11) | 767 ms | 418 ms | 624 ms | 469 ms |
+
+- **Planar wins when only some channels are touched, or when the loop needs all three.** Brightness over all values is the same loop over contiguous bytes in both layouts, so it takes the same time. Brightening one channel is 4.4 times faster in planar form, although the interleaved loop walks 3 times as many bytes: so the memory traffic is not all of it. The likely cause, not isolated, is that the compiler vectorizes the planar loops and not the interleaved ones. Converting costs about 1.4 ms each way, less than one interleaved grayscale, so it pays off when several channel-wise filters follow.
+- **The grayscale loop is not vectorized because of its shape, not its layout.** The report ([docs/vectorization.md](docs/vectorization.md)) says "uncountable loop": the counter steps by 3 and could wrap. A separate test function that counts pixels instead of bytes vectorizes. I did not put that change in the library, and I did not measure how much faster it is.
+- **The earlier guess about the flips was half right.** The horizontal flip is 8.6 times slower than the vertical one in this run (the v3 table said about 15 times; the machine and the load were different, so "roughly 8 to 15 times" is what I can say). It is not the memory access pattern: both flips walk memory in order, and copying the same 24.9 MB takes about 1 ms. In the assembly the horizontal flip has no vector instruction and 12 single-byte operations per swapped pixel, so it is bound by instructions. Processing 16-pixel blocks helps only 1.4 times, because the compiler still moves bytes one at a time. A flip written with NEON reverse instructions was not tried, so "scalar code is the cause" rests on the assembly and the copy reference, not on a fast version.
+- **Moving the border test out of the blur gives 1.3 to 1.8 times.** Even then a 4K blur at radius 5 takes 0.4 to 0.5 s, about 0.4 ns per neighbour for 8-bit. The inner loop sums a window of only a few pixels per row, so vectorizing it has little to work with; the gain likely comes from removing the test, not from vectorization (the report was not mapped line by line to the two pixel types). A blur that adds up a running sum instead of re-reading the window was not tried.
+- **I have not looked at the rotation's access order yet.** The v3 text says it reads a column at a time; that was not measured in this stage.
 
 ## Third-party code
 
