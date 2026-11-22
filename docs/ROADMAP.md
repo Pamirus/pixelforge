@@ -103,7 +103,7 @@ pixelforge is built in twelve stages. Each stage applies one group of C++ ideas 
 ## v9 — Zero-cost abstraction
 
 - [x] One filter as a raw loop, as an STL algorithm with a lambda, and with ranges
-- [ ] Compare their assembly in `docs/`
+- [x] Compare their assembly in `docs/`
 - [ ] Lazy filter chains with expression templates, without intermediate images
 - [ ] README row, tag `v9`
 
