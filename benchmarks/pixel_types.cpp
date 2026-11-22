@@ -86,6 +86,19 @@ void box_blur_image(benchmark::State& state)
     report_bytes(state, image);
 }
 
+// The same blur with the border checks moved out of the inner loop.
+template <typename T>
+void box_blur_clipped_image(benchmark::State& state)
+{
+    BasicImage<T> image(width, height);
+    const int radius = static_cast<int>(state.range(0));
+    for (auto _ : state) {
+        pixelforge::box_blur_clipped(image, radius);
+        benchmark::ClobberMemory();
+    }
+    report_bytes(state, image);
+}
+
 } // namespace
 
 BENCHMARK_TEMPLATE(grayscale_image, std::uint8_t)->Unit(benchmark::kMillisecond);
@@ -97,4 +110,8 @@ BENCHMARK(convert_to_uint8)->Unit(benchmark::kMillisecond);
 BENCHMARK_TEMPLATE(box_blur_image, std::uint8_t)
     ->Arg(1)->Arg(2)->Arg(5)->Unit(benchmark::kMillisecond);
 BENCHMARK_TEMPLATE(box_blur_image, float)
+    ->Arg(1)->Arg(2)->Arg(5)->Unit(benchmark::kMillisecond);
+BENCHMARK_TEMPLATE(box_blur_clipped_image, std::uint8_t)
+    ->Arg(1)->Arg(2)->Arg(5)->Unit(benchmark::kMillisecond);
+BENCHMARK_TEMPLATE(box_blur_clipped_image, float)
     ->Arg(1)->Arg(2)->Arg(5)->Unit(benchmark::kMillisecond);

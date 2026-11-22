@@ -119,6 +119,16 @@ template <typename T>
 template <typename T>
 void box_blur(BasicImage<T>& image, int radius);
 
+// The same result as box_blur, with the border handled once per pixel instead
+// of once per neighbour. box_blur asks for every pixel of the window whether
+// it lies inside the image. This version first cuts the window down to the
+// part that does, with a few min and max calls, and then runs plain loops over
+// that rectangle with no test inside them. The pixels it adds up, and the
+// order it adds them in, are the same, so the result is the same, also for
+// float images. Stage v8 compares the speed of the two.
+template <typename T>
+void box_blur_clipped(BasicImage<T>& image, int radius);
+
 // Sharpens the image with the 3 × 3 kernel
 //
 //      0 -1  0

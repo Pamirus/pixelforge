@@ -96,7 +96,7 @@ pixelforge is built in twelve stages. Each stage applies one group of C++ ideas 
 
 - [x] Interleaved (`RGBRGB…`) vs planar (`RRR…GGG…BBB…`) storage, benchmarked
 - [x] Horizontal vs vertical flip timing
-- [ ] Blur with the border checks moved out of the inner loop
+- [x] Blur with the border checks moved out of the inner loop
 - [ ] Read the compiler's vectorization report
 - [ ] README row, tag `v8`
 

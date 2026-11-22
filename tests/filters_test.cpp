@@ -355,6 +355,48 @@ TEST(Filters, BoxBlurWithAHugeRadiusAveragesTheWholeImage)
     EXPECT_EQ(pixels(image), (std::vector<std::uint8_t>(9, 50)));
 }
 
+// The clipped blur must give the pixels of box_blur for every image shape and
+// radius: a single pixel, a single row or column, windows that cover the whole
+// image, and ones that touch a border on one side only.
+TEST(Filters, ClippedBoxBlurGivesTheSameImageAsBoxBlur)
+{
+    const int sizes[][2] = {{1, 1}, {1, 7}, {7, 1}, {2, 2}, {7, 5}, {20, 3}, {13, 17}};
+    for (const auto& size : sizes) {
+        const Image original = make_test_image(size[0], size[1]);
+        for (const int radius : {0, 1, 2, 3, 5, 100}) {
+            Image expected = original;
+            pixelforge::box_blur(expected, radius);
+            Image clipped = original;
+            pixelforge::box_blur_clipped(clipped, radius);
+            EXPECT_EQ(pixels(clipped), pixels(expected))
+                << size[0] << "x" << size[1] << " radius " << radius;
+        }
+    }
+}
+
+// The sums are added in the same order, so even float results are equal.
+TEST(FloatFilters, ClippedBoxBlurGivesExactlyTheSameImageAsBoxBlur)
+{
+    const pixelforge::FloatImage original = pixelforge::to_float(make_test_image(19, 11));
+    for (const int radius : {1, 2, 4, 30}) {
+        pixelforge::FloatImage expected = original;
+        pixelforge::box_blur(expected, radius);
+        pixelforge::FloatImage clipped = original;
+        pixelforge::box_blur_clipped(clipped, radius);
+        EXPECT_TRUE(std::equal(clipped.data(), clipped.data() + clipped.size(), expected.data()))
+            << "radius " << radius;
+    }
+}
+
+TEST(Filters, ClippedBoxBlurRejectsANegativeRadiusAndAcceptsAnEmptyImage)
+{
+    Image image = make_test_image(3, 3);
+    EXPECT_THROW(pixelforge::box_blur_clipped(image, -1), std::invalid_argument);
+    Image empty;
+    pixelforge::box_blur_clipped(empty, 2);
+    EXPECT_TRUE(empty.empty());
+}
+
 TEST(Filters, BoxBlurRadiusZeroChangesNothingAndNegativeThrows)
 {
     const Image original = make_test_image(6, 5);

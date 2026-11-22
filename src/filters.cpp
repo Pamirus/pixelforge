@@ -290,6 +290,51 @@ void sobel(BasicImage<T>& image)
     }
 }
 
+template <typename T>
+void box_blur_clipped(BasicImage<T>& image, int radius)
+{
+    if (radius < 0) {
+        throw std::invalid_argument("blur radius must not be negative");
+    }
+    if (radius == 0 || image.empty()) {
+        return;
+    }
+    using Traits = ChannelTraits<T>;
+    constexpr int channels = BasicImage<T>::channels;
+    const int width = image.width();
+    const int height = image.height();
+    radius = std::min(radius, std::max(width, height));
+
+    const BasicImage<T> source = image;
+
+    for (int y = 0; y < height; ++y) {
+        const std::span<T> out = image.row(y);
+        // The rows of the window that lie inside the image. They are the same
+        // for every pixel of this row.
+        const int top = std::max(y - radius, 0);
+        const int bottom = std::min(y + radius, height - 1);
+        for (int x = 0; x < width; ++x) {
+            // The columns of the window inside the image, worked out once.
+            const int left = std::max(x - radius, 0);
+            const int right = std::min(x + radius, width - 1);
+            const int count = (right - left + 1) * (bottom - top + 1);
+
+            typename Traits::Sum sum[channels] = {};
+            for (int sy = top; sy <= bottom; ++sy) {
+                const T* pixel = source.row(sy).data() + left * channels;
+                for (int sx = left; sx <= right; ++sx, pixel += channels) {
+                    for (int c = 0; c < channels; ++c) {
+                        sum[c] += pixel[c];
+                    }
+                }
+            }
+            for (int c = 0; c < channels; ++c) {
+                out[static_cast<std::size_t>(x) * channels + c] = Traits::mean(sum[c], count);
+            }
+        }
+    }
+}
+
 // Explicit instantiations: the compiler generates each filter for both
 // channel types here, so the declarations in filters.hpp are all other files
 // need.
@@ -311,6 +356,8 @@ template Image rotate_90(const Image&);
 template FloatImage rotate_90(const FloatImage&);
 template void box_blur(Image&, int);
 template void box_blur(FloatImage&, int);
+template void box_blur_clipped(Image&, int);
+template void box_blur_clipped(FloatImage&, int);
 template void sharpen(Image&);
 template void sharpen(FloatImage&);
 template void sobel(Image&);
