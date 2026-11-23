@@ -1,0 +1,6 @@
+measured 2026-11-23 12:27; 3 rounds x 30 runs of each filter per tag
+image: cat-4k.jpg
+busiest processes before each round (%cpu, name):
+  96.6 godot; 65.7 cpptools; 5.6 WindowServer
+  99.2 godot; 95.7 cpptools; 3.5 com.apple.WebKit.GPU
+  81.3 godot; 59.5 cpptools; 29.3 Microsoft Update Assistant
