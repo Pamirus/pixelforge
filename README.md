@@ -6,7 +6,7 @@ A small command-line photo filter program, and a lab for measuring what modern C
 
 pixelforge loads a photo, applies filters such as grayscale, brightness, blur or threshold, and saves the result. The program is rewritten in stages. It starts as plain C with `malloc` and `free`, then moves through RAII, move semantics, views, templates, concepts, data layout, parallelism and lazy evaluation. Each stage gets a git tag (`v0`, `v1`, …) and a benchmark, so any two stages can be compared.
 
-**Status:** v0 (the C baseline), v1 (an `Image` class built on RAII), v2 (copying versus moving), v3 (views, flips and rotation), v4 (templates for 8-bit and `float` pixels, box blur) and v5 (work moved to compile time) and v6 (concepts, compared with `std::enable_if`) and v7 (four ways to choose a filter, plus sharpen and Sobel) and v8 (memory layout and the vectorization report) are done. Next is v9: zero-cost abstraction, checked in the assembly. The plan is in [docs/ROADMAP.md](docs/ROADMAP.md).
+**Status:** v0 (the C baseline), v1 (an `Image` class built on RAII), v2 (copying versus moving), v3 (views, flips and rotation), v4 (templates for 8-bit and `float` pixels, box blur) and v5 (work moved to compile time) and v6 (concepts, compared with `std::enable_if`) and v7 (four ways to choose a filter, plus sharpen and Sobel) and v8 (memory layout and the vectorization report) and v9 (loops against STL algorithms and ranges, lazy filter chains) are done. Next is v10: parallelism and design patterns. The plan is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## Usage
 
@@ -238,6 +238,37 @@ All numbers are for the 3840 × 2160, 8-bit image, the middle of three runs of f
 - **The earlier guess about the flips was half right.** The horizontal flip is 8.6 times slower than the vertical one in this run (the v3 table said about 15 times; the machine and the load were different, so "roughly 8 to 15 times" is what I can say). It is not the memory access pattern: both flips walk memory in order, and copying the same 24.9 MB takes about 1 ms. In the assembly the horizontal flip has no vector instruction and 12 single-byte operations per swapped pixel, so it is bound by instructions. Processing 16-pixel blocks helps only 1.4 times, because the compiler still moves bytes one at a time. A flip written with NEON reverse instructions was not tried, so "scalar code is the cause" rests on the assembly and the copy reference, not on a fast version.
 - **Moving the border test out of the blur gives 1.3 to 1.8 times.** Even then a 4K blur at radius 5 takes 0.4 to 0.5 s, about 0.4 ns per neighbour for 8-bit. The inner loop sums a window of only a few pixels per row, so vectorizing it has little to work with; the gain likely comes from removing the test, not from vectorization (the report was not mapped line by line to the two pixel types). A blur that adds up a running sum instead of re-reading the window was not tried.
 - **I have not looked at the rotation's access order yet.** The v3 text says it reads a column at a time; that was not measured in this stage.
+
+### Zero-cost abstraction (v9)
+
+```sh
+build/benchmarks/pixelforge_benchmarks --benchmark_filter='negative_|chain_(step|lazy)' --benchmark_repetitions=5 --benchmark_enable_random_interleaving=true
+```
+
+All numbers: 3840 × 2160, 8-bit, middle of three runs of five repetitions with the repetitions in random order.
+
+**The negative three ways** ([negative_variants.hpp](include/pixelforge/negative_variants.hpp); measured 2026-11-22, 22:47 to 22:48):
+
+| Version | Time |
+|---|---|
+| Raw loop | 0.70 ms |
+| `std::transform` with a lambda | 0.61 ms |
+| `std::ranges::copy` of a `views::transform` | 0.71 ms |
+
+**A chain of three filters** (brightness, negative, brightness; [lazy.hpp](include/pixelforge/lazy.hpp); measured 2026-11-23, 04:05 to 04:06):
+
+| Version | Time |
+|---|---|
+| Three passes in place | 5.84 ms |
+| Three passes, a new image per step | 9.67 ms |
+| Lazy chain, one pass from the source to a result image | 5.81 ms |
+
+Both runs were on a machine that did not get quiet: the first with `godot`, `cpptools` and simulator services using 70 to 95% of a core each, the second with `cpptools` at 99% of one core for the whole time. Within the first table the single runs ranged from 0.57 to 1.06 ms, which is as much as the gaps.
+
+- **The three ways of writing the negative are the same machine code in the part that matters.** [docs/abstraction-assembly.md](docs/abstraction-assembly.md) compares them: each is a loop of two 16-byte loads, four `mvn`, two stores per 64 bytes, then an 8-byte loop and a byte loop for the end; no calls, the lambda and the view are inlined. That is why the times agree. It was checked for Apple Clang 21 at `-O3`, for one filter that reads and writes the same place; GCC was not run, nor a Debug build, where the lambda and the iterators are real calls.
+- **An expression template computes the whole chain in one pass, but that did not beat three in-place passes here.** The lazy chain took 5.81 ms and the three in-place passes 5.84 ms. It was 1.7 times faster than making a new image per step. I expected the single pass to win; why it does not I did not find out. Guesses, not tested: the 24.9 MB may stay partly in the cache between the in-place passes, and the lazy chain moves two buffers (source and result) where the in-place chain moves one. Float images, longer chains and an image larger than the cache were not tried.
+- **My first lazy chain was four times slower, and the reason is a lesson about `uint8_t`.** It took 18.5 ms against 4.5 ms for the three passes. The report of the compiler said "cannot identify array bounds" and the loop was not vectorized: the loop read the source pointer and the filter objects through `this`, and a store through a `uint8_t*` may change any object, so the compiler had to read them again after every store. Copying them into local variables before the loop made it vectorize, and the time came down to the 5.8 ms above. The cause is supported by the report and by the fix, but I did not look at the slow assembly line by line.
+- **Only pointwise filters can be fused this way.** Brightness and negative change a value from its own old value. A blur reads neighbours and a flip writes elsewhere, so they would need more than this chain.
 
 ## Third-party code
 
