@@ -3,8 +3,11 @@ add_library(pixelforge_core STATIC
   filters.cpp
   image.cpp
   io.cpp
+  parallel.cpp
   planar.cpp)
 target_include_directories(pixelforge_core PUBLIC ${PROJECT_SOURCE_DIR}/include)
+find_package(Threads REQUIRED)
+target_link_libraries(pixelforge_core PUBLIC Threads::Threads)
 target_link_libraries(pixelforge_core PRIVATE stb pixelforge_warnings)
 
 add_executable(pixelforge main.cpp)

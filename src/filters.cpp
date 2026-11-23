@@ -291,23 +291,16 @@ void sobel(BasicImage<T>& image)
 }
 
 template <typename T>
-void box_blur_clipped(BasicImage<T>& image, int radius)
+void box_blur_clipped_rows(const BasicImage<T>& source, BasicImage<T>& image, int radius,
+                           int y_begin, int y_end)
 {
-    if (radius < 0) {
-        throw std::invalid_argument("blur radius must not be negative");
-    }
-    if (radius == 0 || image.empty()) {
-        return;
-    }
     using Traits = ChannelTraits<T>;
     constexpr int channels = BasicImage<T>::channels;
     const int width = image.width();
     const int height = image.height();
     radius = std::min(radius, std::max(width, height));
 
-    const BasicImage<T> source = image;
-
-    for (int y = 0; y < height; ++y) {
+    for (int y = y_begin; y < y_end; ++y) {
         const std::span<T> out = image.row(y);
         // The rows of the window that lie inside the image. They are the same
         // for every pixel of this row.
@@ -335,6 +328,19 @@ void box_blur_clipped(BasicImage<T>& image, int radius)
     }
 }
 
+template <typename T>
+void box_blur_clipped(BasicImage<T>& image, int radius)
+{
+    if (radius < 0) {
+        throw std::invalid_argument("blur radius must not be negative");
+    }
+    if (radius == 0 || image.empty()) {
+        return;
+    }
+    const BasicImage<T> source = image;
+    box_blur_clipped_rows(source, image, radius, 0, image.height());
+}
+
 // Explicit instantiations: the compiler generates each filter for both
 // channel types here, so the declarations in filters.hpp are all other files
 // need.
@@ -357,6 +363,8 @@ template FloatImage rotate_90(const FloatImage&);
 template void box_blur(Image&, int);
 template void box_blur(FloatImage&, int);
 template void box_blur_clipped(Image&, int);
+template void box_blur_clipped_rows(const Image&, Image&, int, int, int);
+template void box_blur_clipped_rows(const FloatImage&, FloatImage&, int, int, int);
 template void box_blur_clipped(FloatImage&, int);
 template void sharpen(Image&);
 template void sharpen(FloatImage&);

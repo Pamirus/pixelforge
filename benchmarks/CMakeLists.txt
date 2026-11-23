@@ -19,7 +19,7 @@ if(PIXELFORGE_BUILD_BENCHMARKS)
   FetchContent_MakeAvailable(googlebenchmark)
 
   add_executable(pixelforge_benchmarks copy_move.cpp views.cpp pixel_types.cpp
-    compile_time.cpp dispatch.cpp layout.cpp abstraction.cpp)
+    compile_time.cpp dispatch.cpp layout.cpp abstraction.cpp parallel.cpp)
   target_link_libraries(pixelforge_benchmarks PRIVATE
     pixelforge_core benchmark::benchmark_main pixelforge_warnings)
 endif()

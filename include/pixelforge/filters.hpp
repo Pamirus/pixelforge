@@ -129,6 +129,14 @@ void box_blur(BasicImage<T>& image, int radius);
 template <typename T>
 void box_blur_clipped(BasicImage<T>& image, int radius);
 
+// The work of box_blur_clipped for the rows y_begin to y_end - 1 only: reads
+// `source` (an unchanged copy of the image) and writes those rows of `image`.
+// Two threads that are given different rows write different memory and read
+// only `source`, so they can run at the same time (stage v10).
+template <typename T>
+void box_blur_clipped_rows(const BasicImage<T>& source, BasicImage<T>& image, int radius,
+                           int y_begin, int y_end);
+
 // Sharpens the image with the 3 × 3 kernel
 //
 //      0 -1  0
