@@ -119,5 +119,5 @@ pixelforge is built in twelve stages. Each stage applies one group of C++ ideas 
 
 - [x] One script that benchmarks every tag and plots the results
 - [x] Why brightness is memory-bound and a large blur is compute-bound
-- [ ] Short note on how the filters would map to a GPU
+- [x] Short note on how the filters would map to a GPU
 - [ ] Final write-up in `docs/`, tag `v11`
