@@ -6,7 +6,7 @@ A small command-line photo filter program, and a lab for measuring what modern C
 
 pixelforge loads a photo, applies filters such as grayscale, brightness, blur or threshold, and saves the result. The program is rewritten in stages. It starts as plain C with `malloc` and `free`, then moves through RAII, move semantics, views, templates, concepts, data layout, parallelism and lazy evaluation. Each stage gets a git tag (`v0`, `v1`, …) and a benchmark, so any two stages can be compared.
 
-**Status:** v0 (the C baseline), v1 (an `Image` class built on RAII), v2 (copying versus moving), v3 (views, flips and rotation), v4 (templates for 8-bit and `float` pixels, box blur) and v5 (work moved to compile time) and v6 (concepts, compared with `std::enable_if`) and v7 (four ways to choose a filter, plus sharpen and Sobel) and v8 (memory layout and the vectorization report) and v9 (loops against STL algorithms and ranges, lazy filter chains) are done. Next is v10: parallelism and design patterns. The plan is in [docs/ROADMAP.md](docs/ROADMAP.md).
+**Status:** v0 (the C baseline), v1 (an `Image` class built on RAII), v2 (copying versus moving), v3 (views, flips and rotation), v4 (templates for 8-bit and `float` pixels, box blur) and v5 (work moved to compile time) and v6 (concepts, compared with `std::enable_if`) and v7 (four ways to choose a filter, plus sharpen and Sobel) and v8 (memory layout and the vectorization report) and v9 (loops against STL algorithms and ranges, lazy filter chains) and v10 (threads, a data race, a filter factory and a decorator) are done. Next is v11: a script that measures every tag, and why some filters are memory-bound. The plan is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## Usage
 
@@ -269,6 +269,46 @@ Both runs were on a machine that did not get quiet: the first with `godot`, `cpp
 - **An expression template computes the whole chain in one pass, but that did not beat three in-place passes here.** The lazy chain took 5.81 ms and the three in-place passes 5.84 ms. It was 1.7 times faster than making a new image per step. I expected the single pass to win; why it does not I did not find out. Guesses, not tested: the 24.9 MB may stay partly in the cache between the in-place passes, and the lazy chain moves two buffers (source and result) where the in-place chain moves one. Float images, longer chains and an image larger than the cache were not tried.
 - **My first lazy chain was four times slower, and the reason is a lesson about `uint8_t`.** It took 18.5 ms against 4.5 ms for the three passes. The report of the compiler said "cannot identify array bounds" and the loop was not vectorized: the loop read the source pointer and the filter objects through `this`, and a store through a `uint8_t*` may change any object, so the compiler had to read them again after every store. Copying them into local variables before the loop made it vectorize, and the time came down to the 5.8 ms above. The cause is supported by the report and by the fix, but I did not look at the slow assembly line by line.
 - **Only pointwise filters can be fused this way.** Brightness and negative change a value from its own old value. A blur reads neighbours and a flip writes elsewhere, so they would need more than this chain.
+
+### Parallelism and patterns (v10)
+
+```sh
+build/benchmarks/pixelforge_benchmarks --benchmark_filter='parallel_|histogram_' --benchmark_repetitions=5 --benchmark_enable_random_interleaving=true
+```
+
+**Threads, not OpenMP.** The plan said OpenMP. Apple Clang has no `-fopenmp`, and `libomp` is not installed on the development machine, so the work is split by hand with `std::thread` ([parallel.hpp](include/pixelforge/parallel.hpp)): one equal piece per thread, the calling thread takes the last one. The idea is the same as `#pragma omp parallel for`, and it builds on both CI compilers. The Mac has six cores: two fast and four power-saving ones, so more threads do not add equal steps.
+
+All numbers: 3840 × 2160, 8-bit, wall-clock time, the middle of three runs of five repetitions with the repetitions in random order. **The machine was not quiet in either run** (2026-11-23, 07:45 and 09:04): `cpptools` used 83 to 135% of a core, `godot` up to 83%, and `wait_idle` never saw quiet in 15 minutes. Single runs of the same cell differed by up to 30% (brightness on two threads: 9.1 to 12.0 ms), so the gaps below of less than that are not worth reading into.
+
+**Filters on 1 to 6 threads** (milliseconds; the results equal the serial filters' for every thread count, checked in the tests):
+
+| Threads | 1 | 2 | 3 | 4 | 5 | 6 |
+|---|---|---|---|---|---|---|
+| Brightness | 4.0 | 10.8 | 8.6 | 8.4 | 8.6 | 7.7 |
+| Grayscale | 4.5 | 8.1 | 7.5 | 6.1 | 6.0 | 5.0 |
+| Blur, radius 2 | 210 | 116 | 95 | 84 | 76 | 77 |
+
+**Histogram of the gray levels** (milliseconds; "noise" is a pseudo-random image, "flat" has one gray level everywhere; the serial version takes 8.4 and 8.0):
+
+| Version | Image | 1 thread | 2 | 4 | 6 |
+|---|---|---|---|---|---|
+| Racy (plain `++` on shared counters) | noise | 7.7 | 22.4 | 30.8 | 30.3 |
+| Racy | flat | 8.6 | 11.2 | 6.4 | 6.9 |
+| Atomic counters | noise | 11.4 | 55.5 | 136 | 83.4 |
+| Atomic counters | flat | 23.3 | 50.1 | 92.6 | 128 |
+| Private counters per thread | noise | 8.3 | 6.2 | 3.4 | 3.3 |
+| Private counters per thread | flat | 8.9 | 7.1 | 4.8 | 4.8 |
+| Private counters, laid out for false sharing | noise | 9.3 | 22.0 | 22.8 | 18.7 |
+| Private counters, laid out for false sharing | flat | 9.5 | 10.6 | 6.6 | 5.8 |
+
+- **Only the blur gets faster with threads, and only 2.5 to 2.8 times with five or six.** The blur does a lot of work per byte, so the threads do not wait for memory. Brightness and grayscale are the opposite: one thread already finishes a pass in 4 to 5 ms, and with more threads they got *slower*. My guess is the cost of starting new threads on every call and of six cores sharing the memory; I did not test it, and a thread pool that is started once might change it.
+- **The racy histogram loses counts.** It is undefined behaviour and was written only to be measured. On a flat 1000 × 1000 image with four threads it counted 233,009, 493,361 and 405,121 of 1,000,000 pixels in three runs. In the 4K benchmark it lost 1.2 to 2.8 million of 8.3 million counts on the noise image and 4 to 6 million on the flat one; the lost number changes from run to run. ThreadSanitizer reports the race in this version and in none of the others. The tests do not call it, because a test that needs a race to go wrong would be flaky.
+- **Atomic counters are correct and the slowest.** Every `++` is one atomic instruction on a counter that other cores also want, and from two threads on the version is slower than the serial one, up to 16 times (136 ms against 8.4 ms) on the noise image.
+- **Private counters, merged at the end, are the fastest and the only version that scales:** 3.3 ms on six threads, 2.6 times faster than the serial 8.4 ms, not 6 times. They are correct, and ThreadSanitizer finds nothing.
+- **False sharing costs a lot on the noise image: 18.7 to 22.8 ms against 3.3 to 6.2 ms for the same counters laid out one array per thread.** In that layout the counters of one gray level for all threads sit next to each other, so one 64-byte cache line holds counters of several threads and a write by one core invalidates the line in the others.
+- **I cannot explain one result.** On the *flat* image the same bad layout is fast (5.8 ms on six threads), and so is the racy version (6.4 ms). I expected the opposite: all threads add to the same few counters, and these should fight the most. I did not find the reason and will not make one up. The machine was busy, and I measured each of these cells in three runs only.
+
+**Two patterns, with no timing.** [factory.hpp](include/pixelforge/factory.hpp) is a table with one row per filter (name, whether it takes a number, the range, how to build it) in place of the ten `else if` branches of `main.cpp`; `make_filter("blur", 3)` builds from a name, and the messages and exit codes of the command line did not change. [timed_filter.hpp](include/pixelforge/timed_filter.hpp) is a decorator: a `Filter` that holds another `Filter`, applies it inside a `ScopedTimer` and reports its description, so the loop that runs the filters does not ask whether `--time` is on.
 
 ## Third-party code
 
