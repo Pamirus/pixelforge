@@ -19,6 +19,7 @@ add_executable(pixelforge_tests
   filters_test.cpp
   image_test.cpp
   image_view_test.cpp
+  lazy_test.cpp
   io_test.cpp
   negative_variants_test.cpp
   planar_test.cpp

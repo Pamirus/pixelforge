@@ -104,7 +104,7 @@ pixelforge is built in twelve stages. Each stage applies one group of C++ ideas 
 
 - [x] One filter as a raw loop, as an STL algorithm with a lambda, and with ranges
 - [x] Compare their assembly in `docs/`
-- [ ] Lazy filter chains with expression templates, without intermediate images
+- [x] Lazy filter chains with expression templates, without intermediate images
 - [ ] README row, tag `v9`
 
 ## v10 — Parallelism and design patterns
