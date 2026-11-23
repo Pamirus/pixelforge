@@ -1,5 +1,6 @@
 # The C++ version of pixelforge. It changes stage by stage; see docs/ROADMAP.md.
 add_library(pixelforge_core STATIC
+  factory.cpp
   filters.cpp
   image.cpp
   io.cpp

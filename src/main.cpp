@@ -5,6 +5,7 @@
 // Filters run in the order they are given. Errors are exceptions caught once
 // in main, where the C baseline needs a goto to a single cleanup label.
 
+#include "pixelforge/factory.hpp"
 #include "pixelforge/filters.hpp"
 #include "pixelforge/image.hpp"
 #include "pixelforge/io.hpp"
@@ -99,28 +100,13 @@ Options parse_arguments(const std::vector<std::string_view>& args)
             return *value;
         };
 
-        if (arg == "--grayscale") {
-            options.filters.push_back(std::make_unique<pixelforge::Grayscale>());
-        } else if (arg == "--brightness") {
-            options.filters.push_back(
-                std::make_unique<pixelforge::Brightness>(number_after(-255, 255)));
-        } else if (arg == "--negative") {
-            options.filters.push_back(std::make_unique<pixelforge::Negative>());
-        } else if (arg == "--threshold") {
-            options.filters.push_back(
-                std::make_unique<pixelforge::Threshold>(number_after(0, 255)));
-        } else if (arg == "--flip-horizontal") {
-            options.filters.push_back(std::make_unique<pixelforge::FlipHorizontal>());
-        } else if (arg == "--flip-vertical") {
-            options.filters.push_back(std::make_unique<pixelforge::FlipVertical>());
-        } else if (arg == "--rotate") {
-            options.filters.push_back(std::make_unique<pixelforge::Rotate90>());
-        } else if (arg == "--blur") {
-            options.filters.push_back(std::make_unique<pixelforge::BoxBlur>(number_after(1, 10)));
-        } else if (arg == "--sharpen") {
-            options.filters.push_back(std::make_unique<pixelforge::Sharpen>());
-        } else if (arg == "--sobel") {
-            options.filters.push_back(std::make_unique<pixelforge::Sobel>());
+        // Every filter is in the table of the factory; one lookup replaces a
+        // branch per filter.
+        const pixelforge::FilterSpec* const spec =
+            arg.starts_with("--") ? pixelforge::find_filter(arg.substr(2)) : nullptr;
+        if (spec != nullptr) {
+            const int setting = spec->takes_number ? number_after(spec->min, spec->max) : 0;
+            options.filters.push_back(spec->make(setting));
         } else if (arg == "--time") {
             options.time = true;
         } else {
