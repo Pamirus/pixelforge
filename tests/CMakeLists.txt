@@ -17,6 +17,7 @@ add_executable(pixelforge_tests
   c_baseline_test.cpp
   counted_image_test.cpp
   filters_test.cpp
+  histogram_test.cpp
   image_test.cpp
   image_view_test.cpp
   lazy_test.cpp

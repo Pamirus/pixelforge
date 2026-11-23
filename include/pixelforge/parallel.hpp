@@ -23,29 +23,40 @@
 
 namespace pixelforge {
 
-// Calls work(begin, end) on `threads` pieces that together cover [0, count).
-// The calling thread does the last piece itself. With threads <= 1, or less
-// work than threads, nothing is started.
+// Calls work(t, begin, end) for t = 0, 1, ... on pieces that together cover
+// [0, count), each on its own thread; t numbers the pieces, so a piece can use
+// the private storage that belongs to its number. The calling thread does the
+// last piece itself. With threads <= 1, or less work than threads, fewer
+// threads are started (t is always below max(threads, 1)).
 template <typename Work>
-void parallel_chunks(std::size_t count, unsigned threads, Work work)
+void parallel_chunks_indexed(std::size_t count, unsigned threads, Work work)
 {
     if (threads > count) {
         threads = static_cast<unsigned>(count);
     }
     if (threads <= 1) {
-        work(std::size_t{0}, count);
+        work(0u, std::size_t{0}, count);
         return;
     }
     const std::size_t piece = count / threads;
     std::vector<std::thread> started;
     started.reserve(threads - 1);
     for (unsigned t = 0; t + 1 < threads; ++t) {
-        started.emplace_back([=] { work(t * piece, (t + 1) * piece); });
+        started.emplace_back([=] { work(t, t * piece, (t + 1) * piece); });
     }
-    work((threads - 1) * piece, count); // the last piece takes the remainder
+    work(threads - 1, (threads - 1) * piece, count); // the last piece takes the remainder
     for (std::thread& thread : started) {
         thread.join();
     }
+}
+
+// The same without the number of the piece: work(begin, end).
+template <typename Work>
+void parallel_chunks(std::size_t count, unsigned threads, Work work)
+{
+    parallel_chunks_indexed(count, threads, [=](unsigned, std::size_t begin, std::size_t end) {
+        work(begin, end);
+    });
 }
 
 // The same as brightness(image, amount), grayscale(image) and
