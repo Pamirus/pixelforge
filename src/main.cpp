@@ -10,6 +10,7 @@
 #include "pixelforge/image.hpp"
 #include "pixelforge/io.hpp"
 #include "pixelforge/scoped_timer.hpp"
+#include "pixelforge/timed_filter.hpp"
 
 #include <charconv>
 #include <cstddef>
@@ -113,10 +114,18 @@ Options parse_arguments(const std::vector<std::string_view>& args)
             throw UsageError(std::format("unknown option '{}'", arg));
         }
     }
+    // --time may come after the filters, so the wrapping is done at the end.
+    // Each filter is replaced by a TimedFilter that holds it.
+    if (options.time) {
+        for (auto& filter : options.filters) {
+            filter = std::make_unique<pixelforge::TimedFilter>(std::move(filter));
+        }
+    }
     return options;
 }
 
-// Runs work, timed by a ScopedTimer if timing is on. emplace builds the timer
+// Runs work, timed by a ScopedTimer if timing is on (for loading and saving;
+// the filters are timed by TimedFilter). emplace builds the timer
 // inside the optional, so the timer does not have to be movable.
 template <typename Work>
 void timed(bool enabled, const std::string& label, Work work)
@@ -133,7 +142,7 @@ void run(const Options& options)
     Image image;
     timed(options.time, "load", [&] { image = pixelforge::load(options.input); });
     for (const auto& filter : options.filters) {
-        timed(options.time, filter->description(), [&] { filter->apply(image); });
+        filter->apply(image); // a TimedFilter if --time was given
     }
     timed(options.time, "save", [&] { pixelforge::save(image, options.output); });
 }

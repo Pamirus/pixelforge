@@ -112,7 +112,7 @@ pixelforge is built in twelve stages. Each stage applies one group of C++ ideas 
 - [x] Split the image across cores with OpenMP
 - [x] Histogram: data race → atomics → per-thread bins and false sharing
 - [x] Factory that builds filters from command-line names such as `blur`
-- [ ] Decorator that times each filter
+- [x] Decorator that times each filter
 - [ ] README row, tag `v10`
 
 ## v11 — Measurement

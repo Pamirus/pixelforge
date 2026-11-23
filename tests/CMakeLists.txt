@@ -28,7 +28,8 @@ add_executable(pixelforge_tests
   planar_test.cpp
   poly_test.cpp
   return_value_test.cpp
-  scoped_timer_test.cpp)
+  scoped_timer_test.cpp
+  timed_filter_test.cpp)
 target_link_libraries(pixelforge_tests PRIVATE
   pixelforge_core pixelforge_c_core stb GTest::gtest_main pixelforge_warnings)
 gtest_discover_tests(pixelforge_tests)
