@@ -1,6 +1,6 @@
 # Roadmap
 
-pixelforge is built in twelve stages. Each stage applies one group of C++ ideas to the same program, ends with a git tag (`v0` … `v11`), and adds a row to the results table in the README. Every stage stays tagged, so any two of them can be checked out and benchmarked against each other.
+pixelforge was built in twelve stages (v0 to v11), and v12 collects the follow-ups. Each stage applies one group of C++ ideas to the same program, ends with a git tag (`v0` … `v11`), and adds a row to the results table in the README. Every stage stays tagged, so any two of them can be checked out and benchmarked against each other.
 
 ## How the work is done
 
@@ -25,6 +25,7 @@ pixelforge is built in twelve stages. Each stage applies one group of C++ ideas 
 | v9 | Zero-cost abstraction | Loops vs STL vs ranges in assembly, expression templates | 2027-01-11 |
 | v10 | Parallelism and patterns | OpenMP, data races, atomics, false sharing, Factory, Decorator | 2027-01-18 |
 | v11 | Measurement | Benchmarks of all tags, memory- vs compute-bound, GPU notes | 2027-01-25 |
+| v12 | Follow-ups | What [summary.md](summary.md) left open | unplanned |
 
 ## v0 — C baseline
 
@@ -121,3 +122,25 @@ pixelforge is built in twelve stages. Each stage applies one group of C++ ideas 
 - [x] Why brightness is memory-bound and a large blur is compute-bound
 - [x] Short note on how the filters would map to a GPU
 - [x] Final write-up in `docs/`, tag `v11`
+
+## v12 — Follow-ups
+
+Added after v11, from the list of open points in [summary.md](summary.md). The
+order is a plan, not a promise: the first two are small and likely to pay off,
+the next five are experiments, the rest make earlier measurements more
+trustworthy. Items marked *(quiet machine)* need the machine to be free of
+other work and have to wait until Pamir can close everything else.
+
+- [ ] Brightness in 8-bit saturating arithmetic (also for negative amounts)
+- [ ] Grayscale loop that counts pixels instead of bytes
+- [ ] Horizontal flip with vector (NEON) reverse instructions
+- [ ] Thread pool instead of new threads on every call
+- [ ] Box blur with a running sum, or in two passes
+- [ ] Find out why the lazy chain does not beat three in-place passes
+- [ ] Find out why the bad counter layout is fast on the flat image
+- [ ] Re-measure the tag history and the thread and histogram tables *(quiet machine)*
+- [ ] Read GCC's vectorization report as well as Clang's
+- [ ] Run the layout, memory-bound and thread experiments on `float` images
+- [ ] Re-measure the rotation's access order
+- [ ] Put more filters into the tag history
+- [ ] README row, tag `v12`
