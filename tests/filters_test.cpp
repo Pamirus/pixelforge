@@ -675,3 +675,39 @@ TEST(FilterObjects, AListRunsInOrder)
     std::ranges::reverse(filters);
     EXPECT_EQ(run_on_black_pixel(), (std::vector<std::uint8_t>{255, 255, 255}));
 }
+
+// brighten_bytes works in 8-bit arithmetic and relies on wrap-around to
+// detect overflow. Check it against the plain formula for every byte value
+// and every amount, including the ones beyond +-255 that are clamped.
+TEST(Filters, BrightnessMatchesTheClampedSumForEveryValueAndAmount)
+{
+    std::vector<std::uint8_t> all(256);
+    for (int amount = -300; amount <= 300; ++amount) {
+        for (int v = 0; v < 256; ++v) {
+            all[static_cast<std::size_t>(v)] = static_cast<std::uint8_t>(v);
+        }
+        pixelforge::brighten_bytes(all.data(), all.size(), amount);
+        const int step = std::clamp(amount, -255, 255);
+        for (int v = 0; v < 256; ++v) {
+            ASSERT_EQ(all[static_cast<std::size_t>(v)], std::clamp(v + step, 0, 255))
+                << "value " << v << ", amount " << amount;
+        }
+    }
+}
+
+// The same through brightness() on an image whose size is not a multiple of
+// any vector width, so the loop's tail is checked too.
+TEST(Filters, BrightnessOnAnOddSizedImageMatchesTheFormula)
+{
+    for (const int amount : {-255, -100, -1, 0, 1, 77, 255}) {
+        Image image(13, 7);
+        for (std::size_t i = 0; i < image.size(); ++i) {
+            image.data()[i] = static_cast<std::uint8_t>(i * 29 % 256);
+        }
+        pixelforge::brightness(image, amount);
+        for (std::size_t i = 0; i < image.size(); ++i) {
+            const int original = static_cast<int>(i * 29 % 256);
+            ASSERT_EQ(image.data()[i], std::clamp(original + amount, 0, 255)) << amount;
+        }
+    }
+}

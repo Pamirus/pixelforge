@@ -131,7 +131,7 @@ the next five are experiments, the rest make earlier measurements more
 trustworthy. Items marked *(quiet machine)* need the machine to be free of
 other work and have to wait until Pamir can close everything else.
 
-- [ ] Brightness in 8-bit saturating arithmetic (also for negative amounts)
+- [x] Brightness in 8-bit saturating arithmetic (also for negative amounts)
 - [ ] Grayscale loop that counts pixels instead of bytes
 - [ ] Horizontal flip with vector (NEON) reverse instructions
 - [ ] Thread pool instead of new threads on every call

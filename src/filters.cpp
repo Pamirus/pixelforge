@@ -30,20 +30,55 @@ void grayscale(BasicImage<T>& image)
     }
 }
 
+// Written in 8-bit arithmetic on purpose. The first version computed
+// std::clamp<int>(p[i] + step, 0, 255): correct, but the compiler then widens
+// every byte to a 32-bit number, clamps four of them per vector instruction
+// and narrows them back. Stage v11 measured that: the filter ran at the same
+// speed whether the image was in the cache or not, so the instructions, not
+// the memory, were the limit (docs/memory-vs-compute.md).
+//
+// Here the sum stays a byte. For a positive step, `value + step` wraps around
+// past 255 exactly when the true sum is too large, and then the result is
+// smaller than value; Clang turns that into one saturating add (uqadd on ARM)
+// per 16 bytes. For a negative step the result is max(value, step) - step,
+// which became a vector max and a subtraction: two instructions per 16 bytes
+// (checked in the assembly of Apple Clang 21; a standalone test function got
+// a single uqsub, the library's loop did not).
+void brighten_bytes(std::uint8_t* p, std::size_t count, int amount)
+{
+    amount = std::clamp(amount, -255, 255);
+    if (amount >= 0) {
+        const auto step = static_cast<std::uint8_t>(amount);
+        for (std::size_t i = 0; i < count; ++i) {
+            const auto sum = static_cast<std::uint8_t>(p[i] + step);
+            p[i] = sum < p[i] ? std::uint8_t{255} : sum;
+        }
+    } else {
+        // max(value, step) - step is value - step, or 0 where value < step.
+        // Written as "subtract, then 0 if it wrapped", like the positive
+        // case, Clang made it an add, a compare and a mask: three
+        // instructions per 16 bytes instead of two.
+        const auto step = static_cast<std::uint8_t>(-amount);
+        for (std::size_t i = 0; i < count; ++i) {
+            p[i] = static_cast<std::uint8_t>(std::max(p[i], step) - step);
+        }
+    }
+}
+
 template <typename T>
 void brightness(BasicImage<T>& image, int amount)
 {
-    using Traits = ChannelTraits<T>;
-    using Work = typename Traits::Work;
-
-    // Larger steps change nothing more, and limiting the amount keeps
-    // p[i] + step far away from int overflow.
-    const Work step = Traits::from_setting(std::clamp(amount, -255, 255));
-
-    T* p = image.data();
-    const std::size_t size = image.size();
-    for (std::size_t i = 0; i < size; ++i) {
-        p[i] = static_cast<T>(std::clamp<Work>(p[i] + step, 0, Traits::max));
+    if constexpr (ChannelTraits<T>::is_8_bit) {
+        brighten_bytes(image.data(), image.size(), amount);
+    } else {
+        using Traits = ChannelTraits<T>;
+        // Larger steps change nothing more.
+        const float step = Traits::from_setting(std::clamp(amount, -255, 255));
+        T* p = image.data();
+        const std::size_t size = image.size();
+        for (std::size_t i = 0; i < size; ++i) {
+            p[i] = std::clamp(p[i] + step, 0.0f, Traits::max);
+        }
     }
 }
 

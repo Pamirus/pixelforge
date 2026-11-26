@@ -13,13 +13,9 @@ using detail::ChannelTraits;
 
 void brightness_parallel(Image& image, int amount, unsigned threads)
 {
-    using Traits = ChannelTraits<std::uint8_t>;
-    const int step = std::clamp(amount, -255, 255);
     std::uint8_t* const p = image.data();
     parallel_chunks(image.size(), threads, [=](std::size_t begin, std::size_t end) {
-        for (std::size_t i = begin; i < end; ++i) {
-            p[i] = static_cast<std::uint8_t>(std::clamp<int>(p[i] + step, 0, Traits::max));
-        }
+        brighten_bytes(p + begin, end - begin, amount);
     });
 }
 

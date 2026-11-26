@@ -94,3 +94,30 @@ starting threads on every call remains the guess to test. Neither was tested.
   test of mine. Where the speed falls between 3 and 12.6 MB fits it, nothing more.
 - No hardware counters (cache misses) were read; the conclusions come from timing
   alone, plus the assembly for brightness.
+
+## Update (v12): brightness rewritten in 8 bits
+
+The library's 8-bit brightness now uses the 8-bit form (`brighten_bytes` in
+`src/filters.cpp`): a saturating add (`uqadd.16b`) for positive amounts, and
+`umax` plus a subtraction for negative ones, both 16 bytes per instruction
+step (Apple Clang 21 assembly). A test checks it against the clamped sum for
+every byte value and every amount from -300 to 300.
+
+Measured on 2026-11-26 (20:47 to 20:51), same benchmark, **on a busy machine**:
+`godot` used three cores at 100% the whole time, and `wait_idle` never saw
+quiet. GiB/s, middle of three runs of five repetitions:
+
+| Rows (size) | 16 (48 KB) | 128 (393 KB) | 1024 (3 MB) | 4096 (12.6 MB) | 16384 (50 MB) |
+|---|---|---|---|---|---|
+| `memcpy` | 83 | 64 | 63 | 55 | 38 |
+| `brightness`, +20 | 86 | 64 | 61 | 59 | 37 |
+| `brightness`, -20 | 83 | 60 | 59 | 58 | 39 |
+| the 8-bit test loop above | 85 | 60 | 60 | 58 | 37 |
+
+The library's brightness now runs as fast as a copy at every size and slows
+down as the image leaves the cache, so it has become memory-bound, as the
+roadmap had expected from the start. At 50 MB it takes 2.55 ms, against 5.4 ms
+for the old version on 2026-11-23; the two were not measured in the same
+session, so I do not give a ratio from them. The absolute numbers here are
+lower than on 2026-11-23 for the copy too (38 against 53 GiB/s at 50 MB), which
+fits the busy machine.

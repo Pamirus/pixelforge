@@ -36,6 +36,11 @@ void grayscale(BasicImage<T>& image);
 template <typename T>
 void brightness(BasicImage<T>& image, int amount);
 
+// The 8-bit work of brightness on count bytes: adds amount (clamped to
+// -255..255) to each and keeps the result in 0..255. brightness and
+// brightness_parallel both use it, so they cannot drift apart.
+void brighten_bytes(std::uint8_t* p, std::size_t count, int amount);
+
 // The brightness of 8-bit images as a lookup table: entry v is what
 // brightness(image, amount) turns the channel value v into. The function is
 // constexpr, so it can build a table while the program is compiled, as the

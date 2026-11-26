@@ -4,7 +4,7 @@
 //
 //   copy        std::memcpy between two images: the speed of the memory itself
 //   read        add up every byte: what reading alone costs
-//   brightness  the filter, in place
+//   brightness  the filter, in place (+20; `minus` is -20, the other branch)
 //   bright_u8   the same as brightness for a positive amount, but written in 8 bits:
 //               add, and take 255 if the sum wrapped around
 //   blur r2     box_blur_clipped with radius 2 (25 neighbours per pixel)
@@ -79,6 +79,16 @@ void bound_brightness(benchmark::State& state)
     state.SetBytesProcessed(state.iterations() * static_cast<std::int64_t>(2 * image.size()));
 }
 
+void bound_brightness_minus(benchmark::State& state)
+{
+    Image image(width, static_cast<int>(state.range(0)));
+    for (auto _ : state) {
+        pixelforge::brightness(image, -20);
+        benchmark::ClobberMemory();
+    }
+    state.SetBytesProcessed(state.iterations() * static_cast<std::int64_t>(2 * image.size()));
+}
+
 void bound_brightness_u8(benchmark::State& state)
 {
     Image image(width, static_cast<int>(state.range(0)));
@@ -110,5 +120,6 @@ void bound_blur_r2(benchmark::State& state)
 BENCHMARK(bound_copy)->Apply(sizes);
 BENCHMARK(bound_read)->Apply(sizes);
 BENCHMARK(bound_brightness)->Apply(sizes);
+BENCHMARK(bound_brightness_minus)->Apply(sizes);
 BENCHMARK(bound_brightness_u8)->Apply(sizes);
 BENCHMARK(bound_blur_r2)->Apply(sizes);
