@@ -17,16 +17,24 @@ namespace pixelforge {
 
 using detail::ChannelTraits;
 
+// The loop counts pixels, not bytes. An earlier version stepped through the
+// bytes with `i += 3`; Clang refused to vectorize it as an "uncountable loop"
+// (docs/vectorization.md): if size were near the largest size_t, i += 3 could
+// wrap past zero and never reach it, so the number of iterations is unknown.
+// Counting pixels with ++n has no such case, the compiler knows the loop runs
+// exactly `pixels` times, and it can load 16 pixels at once and split them
+// into their three channels (ld3/st3 on ARM).
 template <typename T>
 void grayscale(BasicImage<T>& image)
 {
     T* p = image.data();
-    const std::size_t size = image.size();
-    for (std::size_t i = 0; i < size; i += BasicImage<T>::channels) {
-        const T gray = ChannelTraits<T>::average(p + i);
-        p[i] = gray;
-        p[i + 1] = gray;
-        p[i + 2] = gray;
+    const std::size_t pixels = image.size() / BasicImage<T>::channels;
+    for (std::size_t n = 0; n < pixels; ++n) {
+        T* const pixel = p + n * BasicImage<T>::channels;
+        const T gray = ChannelTraits<T>::average(pixel);
+        pixel[0] = gray;
+        pixel[1] = gray;
+        pixel[2] = gray;
     }
 }
 

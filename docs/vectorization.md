@@ -83,3 +83,57 @@ from vectorization.
 | `flip_horizontal_blocked` block loop | no | instruction cannot be vectorized |
 | `flip_vertical` (`swap_ranges`) | yes, width 16 | |
 | `box_blur_clipped` | partly | cost model, see above |
+
+## Update (v12): the interleaved loops count pixels
+
+`grayscale` and the interleaved `brighten_channel` now count pixels
+(`for (n = 0; n < pixels; ++n)` over `p + 3 * n`) instead of stepping by 3
+through the bytes. Clang reports both as vectorized, width 16; the grayscale
+loop loads and stores with `ld3.16b` / `st3.16b`, which split 16 pixels into
+their three channels and put them back together.
+
+The assembly showed a second problem that the report does not mention. The
+rounded average `(sum + 1) / 3` is turned into a multiplication by the
+compiler, but in the 16-wide loop Clang 21 took the 16 sums out of the vector
+one by one (`umov.h`), multiplied each with a scalar `umull` and put them back:
+16 scalar multiplies per 16 pixels. The 8-wide loop that handles the end of
+the image did the same in vector instructions. Planar grayscale had exactly the
+same pattern. Written as `(sum * 21846) >> 16`, which gives the same result
+for every possible sum (0 to 765, checked by a test), both loops stay in
+vector instructions (`umlal.4s`, no `umov`). Both grayscales now use this one
+function (`ChannelTraits<std::uint8_t>::average`).
+
+In a separate test file (2026-11-27, busy machine, medians of 60 runs) the
+three forms took 7.8 ms (bytes, `i += 3`), 4.7 to 4.9 ms (pixels, `/ 3`) and
+1.9 to 2.1 ms (pixels, multiplication), so both changes count, the second
+more.
+
+In the library, with `benchmarks/layout.cpp` (3840 × 2160, 8-bit), measured on
+2026-11-28 (18:46 to 18:48) **on a busy machine**: `godot` used about one core
+at 96% to 98% in two of the three runs, and Xcode was open. The old library is
+commit 8120ab2, built with the same compiler; the runs alternate old and new.
+Middle of three medians of five repetitions:
+
+| Operation | Before | After |
+|---|---|---|
+| Interleaved grayscale | 6.52 ms | 1.82 ms (3.6×) |
+| Planar grayscale | 3.08 ms | 1.50 ms (2.1×) |
+| Interleaved `brighten_channel` (red) | 4.76 ms | 2.77 ms (1.7×) |
+| Planar `brighten_channel` (red), unchanged code | 1.00 ms | 1.00 ms |
+
+The planar `brighten_channel` did not change and did not move, which suggests
+the two sides were measured under similar load.
+
+This changes the layout comparison of v8 (#38): planar grayscale was 2.4 times
+faster than interleaved, and now it is 1.2 times faster. Most of that gap came
+from the loop shape and the division, not from the layout. For one channel,
+planar is still 2.8 times faster; a guess, not checked: the interleaved loop
+still loads and stores all three channels to change one, and its arithmetic
+still widens to 32 bits (the 8-bit form of `brighten_bytes` is not used
+there).
+
+Summary row, replacing the one above:
+
+| Loop | Vectorized | Reason given |
+|------|-----------|--------------|
+| interleaved grayscale, `brighten_channel` (pixel counter) | yes, width 16 | |

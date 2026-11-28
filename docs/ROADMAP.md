@@ -132,7 +132,7 @@ trustworthy. Items marked *(quiet machine)* need the machine to be free of
 other work and have to wait until Pamir can close everything else.
 
 - [x] Brightness in 8-bit saturating arithmetic (also for negative amounts)
-- [ ] Grayscale loop that counts pixels instead of bytes
+- [x] Grayscale loop that counts pixels instead of bytes
 - [ ] Horizontal flip with vector (NEON) reverse instructions
 - [ ] Thread pool instead of new threads on every call
 - [ ] Box blur with a running sum, or in two passes

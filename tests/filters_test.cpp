@@ -711,3 +711,46 @@ TEST(Filters, BrightnessOnAnOddSizedImageMatchesTheFormula)
         }
     }
 }
+
+// The 8-bit average is computed with a multiplication instead of "/ 3"
+// (channel_traits.hpp). One pixel for every possible sum of three channels,
+// 0 to 765, so a wrong rounding anywhere in the range would show up here.
+TEST(Filters, GrayscaleRoundsCorrectlyForEverySum)
+{
+    constexpr int largest_sum = 3 * 255;
+    Image image(largest_sum + 1, 1);
+    for (int sum = 0; sum <= largest_sum; ++sum) {
+        std::uint8_t* const pixel = image.data() + static_cast<std::size_t>(sum) * 3;
+        pixel[0] = static_cast<std::uint8_t>(std::min(sum, 255));
+        pixel[1] = static_cast<std::uint8_t>(std::clamp(sum - 255, 0, 255));
+        pixel[2] = static_cast<std::uint8_t>(std::max(sum - 510, 0));
+    }
+    pixelforge::grayscale(image);
+    for (int sum = 0; sum <= largest_sum; ++sum) {
+        const std::uint8_t* const pixel = image.data() + static_cast<std::size_t>(sum) * 3;
+        const auto expected = static_cast<std::uint8_t>((sum + 1) / 3);
+        ASSERT_EQ(pixel[0], expected) << "sum " << sum;
+        ASSERT_EQ(pixel[1], expected) << "sum " << sum;
+        ASSERT_EQ(pixel[2], expected) << "sum " << sum;
+    }
+}
+
+// 91 pixels: the vector loop runs over the first 80 (or 88) and a scalar loop
+// does the rest, so both parts are checked.
+TEST(Filters, GrayscaleOnAnOddSizedImageMatchesTheFormula)
+{
+    Image image(13, 7);
+    for (std::size_t i = 0; i < image.size(); ++i) {
+        image.data()[i] = static_cast<std::uint8_t>(i * 29 % 256);
+    }
+    const Image original = image;
+    pixelforge::grayscale(image);
+    for (std::size_t i = 0; i < image.size(); i += Image::channels) {
+        const std::uint8_t* const before = original.data() + i;
+        const int sum = before[0] + before[1] + before[2];
+        const auto expected = static_cast<std::uint8_t>((sum + 1) / 3);
+        ASSERT_EQ(image.data()[i], expected) << "byte " << i;
+        ASSERT_EQ(image.data()[i + 1], expected) << "byte " << i;
+        ASSERT_EQ(image.data()[i + 2], expected) << "byte " << i;
+    }
+}

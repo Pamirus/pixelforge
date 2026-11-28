@@ -1,5 +1,7 @@
 #include "pixelforge/planar.hpp"
 
+#include "pixelforge/detail/channel_traits.hpp"
+
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
@@ -77,8 +79,8 @@ void grayscale(PlanarImage& image)
     std::uint8_t* blue = image.plane(2).data();
     const std::size_t pixels = image.plane(0).size();
     for (std::size_t i = 0; i < pixels; ++i) {
-        const unsigned sum = unsigned{red[i]} + green[i] + blue[i];
-        const auto gray = static_cast<std::uint8_t>((sum + 1) / 3);
+        const std::uint8_t gray =
+            detail::ChannelTraits<std::uint8_t>::average(red[i], green[i], blue[i]);
         red[i] = gray;
         green[i] = gray;
         blue[i] = gray;
@@ -108,10 +110,13 @@ void brighten_channel(Image& image, int channel, int amount)
 {
     check_channel(channel);
     const int step = std::clamp(amount, -255, 255);
-    std::uint8_t* p = image.data();
-    for (std::size_t i = static_cast<std::size_t>(channel), n = image.size(); i < n;
-         i += Image::channels) {
-        p[i] = brightened(p[i], step);
+    // Counts pixels rather than stepping by 3 through the bytes, for the same
+    // reason as grayscale(): a loop with `i += 3` is "uncountable" to Clang and
+    // is not vectorized.
+    std::uint8_t* const p = image.data() + channel;
+    const std::size_t pixels = image.size() / Image::channels;
+    for (std::size_t n = 0; n < pixels; ++n) {
+        p[n * Image::channels] = brightened(p[n * Image::channels], step);
     }
 }
 

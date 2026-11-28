@@ -59,16 +59,28 @@ struct ChannelTraits {
         }
     }
 
-    // The average of the three channels of a pixel.
-    static T average(const T* pixel)
+    // The average of three channel values, rounded to the nearest whole number on
+    // 8-bit images.
+    static T average(T red, T green, T blue)
     {
         if constexpr (is_8_bit) {
-            const unsigned sum = unsigned{pixel[0]} + pixel[1] + pixel[2];
-            return static_cast<T>((sum + 1) / 3);
+            // (sum + 1) / 3, written as a multiplication: 21846 / 65536 is a
+            // little more than 1 / 3, and for every sum up to 3 * 255 the error is
+            // too small to change the result (tested for all of them in
+            // filters_test.cpp). Compilers turn "/ 3" into a multiplication anyway,
+            // but with "/ 3" Clang 21 took the quotients of the 16-byte grayscale
+            // loops out of the vector one at a time: 16 scalar multiplies per 16
+            // pixels. Written like this the loops stay in vector instructions
+            // (docs/vectorization.md).
+            const std::uint32_t sum = std::uint32_t{red} + green + blue + 1;
+            return static_cast<T>((sum * 21846u) >> 16);
         } else {
-            return (pixel[0] + pixel[1] + pixel[2]) / 3.0f;
+            return (red + green + blue) / 3.0f;
         }
     }
+
+    // The average of the three channels of a pixel.
+    static T average(const T* pixel) { return average(pixel[0], pixel[1], pixel[2]); }
 };
 
 } // namespace pixelforge::detail
